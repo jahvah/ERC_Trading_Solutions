@@ -38,7 +38,7 @@ function AdminNavbar() {
 
                 {' | '}
 
-                <Link to="/reviews">
+                <Link to="/reviews/admin">
                     Reviews
                 </Link>
 

@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose')
 
 const userSchema = new mongoose.Schema({
@@ -5,7 +6,16 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please enter user email'],
         unique: true,
-        trim: true
+        trim: true,
+        lowercase: true
+    },
+
+    username: {
+        type: String,
+        required: [false, 'Please enter username'],
+        unique: true,
+        trim: true,
+        lowercase: true
     },
 
     email_verified_at: {
@@ -51,6 +61,11 @@ const userSchema = new mongoose.Schema({
         default: null
     },
 
+    registration_completed: {
+        type: Boolean,
+        default: true
+    },
+
     customer: {
         title: {
             type: String,
@@ -59,13 +74,13 @@ const userSchema = new mongoose.Schema({
 
         fname: {
             type: String,
-            default: null,
+            required: [false, 'Please enter first name'],
             trim: true
         },
 
         lname: {
             type: String,
-            default: null,
+            required: [false, 'Please enter last name'],
             trim: true
         },
 
@@ -81,6 +96,21 @@ const userSchema = new mongoose.Schema({
 
         phone: {
             type: String,
+            required: [false, 'Please enter contact number'],
+            trim: true
+        },
+
+        gender: {
+            type: String,
+            enum: {
+                values: ['Male', 'Female', 'Other', 'Prefer not to say'],
+                message: 'Please select a valid gender'
+            },
+            default: null
+        },
+
+        date_of_birth: {
+            type: Date,
             default: null
         },
 
