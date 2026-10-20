@@ -1,6 +1,8 @@
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Register from "./pages/Register";
+import CompleteRegistration from "./pages/CompleteRegistration";
 import Login from "./pages/Login";
 import Users from "./pages/Users";
 import Items from "./pages/Items";
@@ -21,10 +23,17 @@ function App() {
       <Routes>
         <Route path="/" element={<h1>ERC Trading Solutions</h1>} />
 
+        {/* Registration */}
         <Route path="/register" element={<Register />} />
+        <Route
+          path="/complete-registration"
+          element={<CompleteRegistration />}
+        />
 
+        {/* Login */}
         <Route path="/login" element={<Login />} />
 
+        {/* Admin pages */}
         <Route
           path="/admin"
           element={
@@ -52,6 +61,7 @@ function App() {
           }
         />
 
+        {/* Customer pages */}
         <Route
           path="/cart"
           element={
@@ -79,6 +89,7 @@ function App() {
           }
         />
 
+        {/* Order management */}
         <Route
           path="/orders"
           element={
@@ -88,6 +99,7 @@ function App() {
           }
         />
 
+        {/* Reviews */}
         <Route
           path="/reviews"
           element={

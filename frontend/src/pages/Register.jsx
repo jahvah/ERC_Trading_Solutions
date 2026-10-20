@@ -1,141 +1,87 @@
-import { useState } from "react";
-import api from "../services/api";
+
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import api from '../services/api'
 
 function Register() {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    fname: "",
-    lname: "",
-    phone: "",
-    addressline: "",
-    town: "",
-  });
+    const [email, setEmail] = useState('')
+    const [message, setMessage] = useState('')
+    const [loading, setLoading] = useState(false)
 
-  const [message, setMessage] = useState("");
+    const navigate = useNavigate()
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+    const handleSubmit = async (e) => {
+        e.preventDefault()
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+        setMessage('')
+        setLoading(true)
 
-    try {
-      const response = await api.post("/users/register", {
-        email: formData.email,
-        password: formData.password,
-        customer: {
-          fname: formData.fname,
-          lname: formData.lname,
-          phone: formData.phone,
-          addressline: formData.addressline,
-          town: formData.town,
-        },
-      });
+        try {
+            const normalizedEmail = email.trim().toLowerCase()
 
-      setMessage(response.data.message);
+            const response = await api.post('/users/register', {
+                email: normalizedEmail
+            })
 
-      setFormData({
-        email: "",
-        password: "",
-        fname: "",
-        lname: "",
-        phone: "",
-        addressline: "",
-        town: "",
-      });
-    } catch (error) {
-      setMessage(error.response?.data?.message || "Registration failed");
+            // Save the registration token returned by the backend.
+            sessionStorage.setItem(
+                'registrationToken',
+                response.data.registrationToken
+            )
+
+            sessionStorage.setItem(
+                'registrationEmail',
+                normalizedEmail
+            )
+
+            navigate('/complete-registration')
+        } catch (error) {
+            setMessage(
+                error.response?.data?.message ||
+                'Unable to start registration. Please try again.'
+            )
+        } finally {
+            setLoading(false)
+        }
     }
-  };
 
-  return (
-    <div>
-      <h1>Register User</h1>
-
-      <form onSubmit={handleSubmit}>
+    return (
         <div>
-          <label>Email</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-          />
+            <h1>Create an Account</h1>
+
+            <p>Enter your email address to get started.</p>
+
+            <form onSubmit={handleSubmit}>
+                <div>
+                    <label htmlFor="email">
+                        Email Address
+                    </label>
+
+                    <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        autoComplete="email"
+                        required
+                    />
+                </div>
+
+                <button type="submit" disabled={loading}>
+                    {loading ? 'Please wait...' : 'Continue'}
+                </button>
+            </form>
+
+            {message && (
+                <p role="alert">{message}</p>
+            )}
+
+            <p>
+                Already have an account?{' '}
+                <a href="/login">Log in</a>
+            </p>
         </div>
-
-        <div>
-          <label>Password</label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div>
-          <label>First Name</label>
-          <input
-            type="text"
-            name="fname"
-            value={formData.fname}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label>Last Name</label>
-          <input
-            type="text"
-            name="lname"
-            value={formData.lname}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label>Phone</label>
-          <input
-            type="text"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label>Address</label>
-          <input
-            type="text"
-            name="addressline"
-            value={formData.addressline}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label>Town</label>
-          <input
-            type="text"
-            name="town"
-            value={formData.town}
-            onChange={handleChange}
-          />
-        </div>
-
-        <button type="submit">Register</button>
-      </form>
-
-      {message && <p>{message}</p>}
-    </div>
-  );
+    )
 }
 
-export default Register;
+export default Register
