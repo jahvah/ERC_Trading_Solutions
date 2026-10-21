@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import api from "../services/api";
-import { getToken, getUser, logout } from "../utils/auth";
+import { getToken, getUser } from "../utils/auth";
+import CustomerNavbar from "../components/CustomerNavbar";
 
 const API_SERVER = "http://localhost:3000";
 
@@ -37,7 +38,6 @@ function getCustomerForm(user) {
 }
 
 function Profile() {
-  const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
   const [formData, setFormData] = useState(getCustomerForm(null));
@@ -185,11 +185,6 @@ function Profile() {
     setMessage("");
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
   if (loading) {
     return (
       <div style={styles.container}>
@@ -221,39 +216,8 @@ function Profile() {
 
   return (
     <div style={styles.container}>
-      <nav style={styles.nav}>
-        <h2 style={styles.brand}>ERC Trading Solutions</h2>
 
-        <div style={styles.navLinks}>
-          <Link to="/profile" style={styles.navLink}>
-            My Profile
-          </Link>
-
-          <Link to="/shop" style={styles.navLink}>
-            Shop
-          </Link>
-
-          <Link to="/cart" style={styles.navLink}>
-            My Cart
-          </Link>
-
-          <Link to="/my-orders" style={styles.navLink}>
-            My Orders
-          </Link>
-
-          <Link to="/reviews" style={styles.navLink}>
-            Reviews
-          </Link>
-
-          <button
-            type="button"
-            style={styles.logoutButton}
-            onClick={handleLogout}
-          >
-            Logout
-          </button>
-        </div>
-      </nav>
+        <CustomerNavbar />
 
       <main style={styles.card}>
         <h1 style={styles.heading}>My Profile</h1>

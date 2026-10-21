@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Link } from "react-router-dom";
 import api from '../services/api'
 import { getToken } from '../utils/auth'
+import CustomerNavbar from "../components/CustomerNavbar";
 
 function Cart() {
     const [cart, setCart] = useState(null)
@@ -127,6 +129,9 @@ function Cart() {
 
     return (
         <div>
+
+             <CustomerNavbar />
+             
             <h1>Shopping Cart</h1>
 
             {message && (

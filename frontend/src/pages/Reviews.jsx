@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Link } from "react-router-dom";
 import api from '../services/api'
 import { getToken } from '../utils/auth'
+import CustomerNavbar from "../components/CustomerNavbar";
 
 function Reviews() {
     const [orders, setOrders] = useState([])
@@ -87,6 +89,9 @@ function Reviews() {
 
     return (
         <div>
+
+            <CustomerNavbar />
+            
             <h1>Reviews</h1>
 
             {message && (
