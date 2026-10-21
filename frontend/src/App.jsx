@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Register from "./pages/Register";
 import CompleteRegistration from "./pages/CompleteRegistration";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
 import Users from "./pages/Users";
 import Items from "./pages/Items";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -21,19 +22,40 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<h1>ERC Trading Solutions</h1>} />
+        {/* Home */}
+        <Route
+          path="/"
+          element={<h1>ERC Trading Solutions</h1>}
+        />
 
         {/* Registration */}
-        <Route path="/register" element={<Register />} />
+        <Route
+          path="/register"
+          element={<Register />}
+        />
+
         <Route
           path="/complete-registration"
           element={<CompleteRegistration />}
         />
 
         {/* Login */}
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
 
-        {/* Admin pages */}
+        {/* Customer Profile */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Admin Pages */}
         <Route
           path="/admin"
           element={
@@ -61,21 +83,21 @@ function App() {
           }
         />
 
-        {/* Customer pages */}
-        <Route
-          path="/cart"
-          element={
-            <ProtectedRoute>
-              <Cart />
-            </ProtectedRoute>
-          }
-        />
-
+        {/* Customer Pages */}
         <Route
           path="/shop"
           element={
             <ProtectedRoute>
               <Shop />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/cart"
+          element={
+            <ProtectedRoute>
+              <Cart />
             </ProtectedRoute>
           }
         />
@@ -89,7 +111,7 @@ function App() {
           }
         />
 
-        {/* Order management */}
+        {/* Order Management */}
         <Route
           path="/orders"
           element={

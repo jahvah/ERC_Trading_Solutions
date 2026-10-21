@@ -1,13 +1,18 @@
+
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 
 function Login() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -18,6 +23,8 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMessage("");
+    setLoading(true);
 
     try {
       const response = await api.post("/users/login", formData);
@@ -25,11 +32,13 @@ function Login() {
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data.user));
 
-      setMessage(response.data.message);
-
-      console.log("Login response:", response.data);
+      navigate("/shop");
     } catch (error) {
-      setMessage(error.response?.data?.message || "Login failed");
+      setMessage(
+        error.response?.data?.message || "Login failed. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -60,7 +69,9 @@ function Login() {
           />
         </div>
 
-        <button type="submit">Login</button>
+        <button type="submit" disabled={loading}>
+          {loading ? "Logging in..." : "Login"}
+        </button>
       </form>
 
       {message && <p>{message}</p>}

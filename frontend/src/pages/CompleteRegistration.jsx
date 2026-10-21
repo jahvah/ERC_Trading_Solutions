@@ -12,12 +12,15 @@ function CompleteRegistration() {
   const registrationEmail = sessionStorage.getItem("registrationEmail");
 
   const [formData, setFormData] = useState({
+    title: "",
     fname: "",
     lname: "",
     username: "",
     phone: "",
     gender: "",
     date_of_birth: "",
+    addressline: "",
+    town: "",
     password: "",
     confirmPassword: "",
   });
@@ -86,8 +89,51 @@ function CompleteRegistration() {
       return;
     }
 
+    const requiredFields = [
+      ["title", "Please select a title."],
+      ["fname", "Please enter your first name."],
+      ["lname", "Please enter your last name."],
+      ["username", "Please enter a username."],
+      ["phone", "Please enter your contact number."],
+      ["gender", "Please select your gender."],
+      ["date_of_birth", "Please enter your date of birth."],
+      ["addressline", "Please enter your address line."],
+      ["town", "Please enter your town or city."],
+      ["password", "Please enter a password."],
+      ["confirmPassword", "Please confirm your password."],
+    ];
+
+    for (const [field, errorMessage] of requiredFields) {
+      if (!formData[field].trim()) {
+        setMessage(errorMessage);
+        return;
+      }
+    }
+
+    if (formData.username.trim().length < 3) {
+      setMessage("Username must contain at least 3 characters.");
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setMessage("Password must contain at least 8 characters.");
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setMessage("Passwords do not match.");
+      return;
+    }
+
+    const birthDate = new Date(`${formData.date_of_birth}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (
+      Number.isNaN(birthDate.getTime()) ||
+      birthDate > today
+    ) {
+      setMessage("Please enter a valid date of birth that is not in the future.");
       return;
     }
 
@@ -97,20 +143,17 @@ function CompleteRegistration() {
       const submissionData = new FormData();
 
       submissionData.append("registrationToken", registrationToken);
+      submissionData.append("title", formData.title);
       submissionData.append("fname", formData.fname.trim());
       submissionData.append("lname", formData.lname.trim());
       submissionData.append("username", formData.username.trim());
       submissionData.append("phone", formData.phone.trim());
+      submissionData.append("gender", formData.gender);
+      submissionData.append("date_of_birth", formData.date_of_birth);
+      submissionData.append("addressline", formData.addressline.trim());
+      submissionData.append("town", formData.town.trim());
       submissionData.append("password", formData.password);
       submissionData.append("confirmPassword", formData.confirmPassword);
-
-      if (formData.gender) {
-        submissionData.append("gender", formData.gender);
-      }
-
-      if (formData.date_of_birth) {
-        submissionData.append("date_of_birth", formData.date_of_birth);
-      }
 
       if (profilePicture) {
         submissionData.append("profile_image", profilePicture);
@@ -124,7 +167,7 @@ function CompleteRegistration() {
       sessionStorage.removeItem("registrationToken");
       sessionStorage.removeItem("registrationEmail");
 
-      alert(response.data.message);
+      alert(response.data.message || "Registration completed successfully.");
       navigate("/login");
     } catch (error) {
       setMessage(
@@ -154,7 +197,10 @@ function CompleteRegistration() {
         Email Address: <strong>{registrationEmail}</strong>
       </p>
 
+      <p>* Required fields</p>
+
       <form onSubmit={handleSubmit}>
+        {/* Profile Picture */}
         <div>
           <label htmlFor="profilePicture">
             Profile Picture (Optional)
@@ -172,6 +218,7 @@ function CompleteRegistration() {
           {profilePreview && (
             <div>
               <p>Image Preview:</p>
+
               <img
                 src={profilePreview}
                 alt="Profile picture preview"
@@ -207,8 +254,29 @@ function CompleteRegistration() {
           )}
         </div>
 
+        {/* Title */}
+        <div>
+          <label htmlFor="title">Title *</label>
+
+          <select
+            id="title"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            required
+          >
+            <option value="">Select title</option>
+            <option value="Mr.">Mr.</option>
+            <option value="Ms.">Ms.</option>
+            <option value="Mrs.">Mrs.</option>
+            <option value="Dr.">Dr.</option>
+          </select>
+        </div>
+
+        {/* First Name */}
         <div>
           <label htmlFor="fname">First Name *</label>
+
           <input
             id="fname"
             name="fname"
@@ -221,8 +289,10 @@ function CompleteRegistration() {
           />
         </div>
 
+        {/* Last Name */}
         <div>
           <label htmlFor="lname">Last Name *</label>
+
           <input
             id="lname"
             name="lname"
@@ -235,8 +305,10 @@ function CompleteRegistration() {
           />
         </div>
 
+        {/* Username */}
         <div>
           <label htmlFor="username">Username *</label>
+
           <input
             id="username"
             name="username"
@@ -252,8 +324,10 @@ function CompleteRegistration() {
           />
         </div>
 
+        {/* Contact Number */}
         <div>
           <label htmlFor="phone">Contact Number *</label>
+
           <input
             id="phone"
             name="phone"
@@ -266,15 +340,18 @@ function CompleteRegistration() {
           />
         </div>
 
+        {/* Gender */}
         <div>
-          <label htmlFor="gender">Gender (Optional)</label>
+          <label htmlFor="gender">Gender *</label>
+
           <select
             id="gender"
             name="gender"
             value={formData.gender}
             onChange={handleChange}
+            required
           >
-            <option value="">Prefer not to specify</option>
+            <option value="">Select gender</option>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
             <option value="Other">Other</option>
@@ -282,20 +359,58 @@ function CompleteRegistration() {
           </select>
         </div>
 
+        {/* Date of Birth */}
         <div>
-          <label htmlFor="date_of_birth">Date of Birth (Optional)</label>
+          <label htmlFor="date_of_birth">Date of Birth *</label>
+
           <input
             id="date_of_birth"
             name="date_of_birth"
             type="date"
             value={formData.date_of_birth}
             onChange={handleChange}
-            max={new Date().toISOString().split("T")[0]}
+            max={new Date().toLocaleDateString("en-CA")}
+            required
           />
         </div>
 
+        {/* Address Line */}
+        <div>
+          <label htmlFor="addressline">Address Line *</label>
+
+          <input
+            id="addressline"
+            name="addressline"
+            type="text"
+            value={formData.addressline}
+            onChange={handleChange}
+            autoComplete="street-address"
+            maxLength={200}
+            placeholder="House number, street, or building"
+            required
+          />
+        </div>
+
+        {/* Town / City */}
+        <div>
+          <label htmlFor="town">Town / City *</label>
+
+          <input
+            id="town"
+            name="town"
+            type="text"
+            value={formData.town}
+            onChange={handleChange}
+            autoComplete="address-level2"
+            maxLength={200}
+            required
+          />
+        </div>
+
+        {/* Password */}
         <div>
           <label htmlFor="password">Password *</label>
+
           <input
             id="password"
             name="password"
@@ -306,11 +421,14 @@ function CompleteRegistration() {
             minLength={8}
             required
           />
+
           <small>Password must contain at least 8 characters.</small>
         </div>
 
+        {/* Confirm Password */}
         <div>
           <label htmlFor="confirmPassword">Confirm Password *</label>
+
           <input
             id="confirmPassword"
             name="confirmPassword"
@@ -338,3 +456,4 @@ function CompleteRegistration() {
 }
 
 export default CompleteRegistration;
+ 
