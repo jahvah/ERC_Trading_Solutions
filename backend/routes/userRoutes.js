@@ -7,9 +7,12 @@ const {
     getUsers,
     getUser,
     updateUser,
-    deleteUser
+    deleteUser,
+    getMyProfile,
+    updateMyProfile
 } = require('../controllers/userController')
 
+const { protect } = require('../middleware/authMiddleware')
 const profileUpload = require('../middleware/profileUpload')
 
 const router = express.Router()
@@ -25,6 +28,10 @@ router.post(
 
 // Login
 router.post('/login', loginUser)
+
+// My Profile
+router.get('/profile', protect, getMyProfile)
+router.put('/profile', protect, updateMyProfile)
 
 // User management
 router.get('/', getUsers)

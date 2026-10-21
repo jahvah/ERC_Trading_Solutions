@@ -1,6 +1,9 @@
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const path = require("path");
+
 const connectDB = require("./config/db");
 const userRoutes = require("./routes/userRoutes");
 const itemRoutes = require("./routes/itemRoutes");
@@ -17,12 +20,20 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 
+// Serve uploaded profile pictures
+app.use(
+    "/profileUpload",
+    express.static(path.join(__dirname, "profileUpload"))
+);
+
+// API routes
 app.use("/api/users", userRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/reviews", reviewRoutes);
 
+// Backend status
 app.get("/", (req, res) => {
     res.json({
         message: "ERC Trading Solutions Backend is running!"
