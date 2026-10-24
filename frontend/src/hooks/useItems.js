@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   getItems,
@@ -38,6 +38,13 @@ function useItems() {
   const [bulkRestoring, setBulkRestoring] = useState(false);
 
   const [viewDeleted, setViewDeleted] = useState(false);
+
+const [minPrice, setMinPrice] = useState("");
+const [maxPrice, setMaxPrice] = useState("");
+const [selectedCategory, setSelectedCategory] = useState("all");
+const [minRating, setMinRating] = useState("0");
+const [reviewFilter, setReviewFilter] = useState("all");
+
 
   // Fetch active products.
   const getActiveProducts = async () => {
@@ -452,6 +459,83 @@ function useItems() {
     }
   };
 
+  // Get the available product categories.
+const categories = useMemo(() => {
+  return [
+    ...new Set(
+      items.map((item) => item.category).filter(Boolean)
+    ),
+  ];
+}, [items]);
+
+// Apply all product filters.
+const filteredItems = useMemo(() => {
+  return items.filter((item) => {
+    const price = Number(item.sell_price) || 0;
+
+    const activeReviews = (item.reviews || []).filter(
+      (review) => !review.deleted_at
+    );
+
+    const averageRating =
+      activeReviews.length > 0
+        ? activeReviews.reduce(
+            (total, review) => total + Number(review.rating),
+            0
+          ) / activeReviews.length
+        : 0;
+
+    // Price filter
+    if (minPrice !== "" && price < Number(minPrice)) {
+      return false;
+    }
+
+    if (maxPrice !== "" && price > Number(maxPrice)) {
+      return false;
+    }
+
+    // Category filter
+    if (
+      selectedCategory !== "all" &&
+      item.category !== selectedCategory
+    ) {
+      return false;
+    }
+
+    // Average rating filter
+    if (
+      Number(minRating) > 0 &&
+      averageRating < Number(minRating)
+    ) {
+      return false;
+    }
+
+    // Review count filter
+    if (
+      reviewFilter === "reviewed" &&
+      activeReviews.length === 0
+    ) {
+      return false;
+    }
+
+    if (
+      reviewFilter === "10" &&
+      activeReviews.length < 10
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}, [
+  items,
+  minPrice,
+  maxPrice,
+  selectedCategory,
+  minRating,
+  reviewFilter,
+]);
+
   return {
     items,
     message,
@@ -482,6 +566,20 @@ function useItems() {
     handleBulkDelete,
     handleRestore,
     handleBulkRestore,
+
+    filteredItems,
+categories,
+minPrice,
+setMinPrice,
+maxPrice,
+setMaxPrice,
+selectedCategory,
+setSelectedCategory,
+minRating,
+setMinRating,
+reviewFilter,
+setReviewFilter
+
   };
 }
 

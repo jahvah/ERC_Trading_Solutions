@@ -1,4 +1,3 @@
-
 import AdminNavbar from "../components/AdminNavbar";
 import ItemForm from "../components/items/ItemForm";
 import ItemList from "../components/items/ItemList";
@@ -34,6 +33,19 @@ function Items() {
     handleBulkDelete,
     handleRestore,
     handleBulkRestore,
+
+    filteredItems,
+    categories,
+    minPrice,
+    setMinPrice,
+    maxPrice,
+    setMaxPrice,
+    selectedCategory,
+    setSelectedCategory,
+    minRating,
+    setMinRating,
+    reviewFilter,
+    setReviewFilter,
   } = useItems();
 
   return (
@@ -55,9 +67,7 @@ function Items() {
           onRemoveSelectedFile={removeSelectedFile}
           existingImages={existingImages}
           imagesToRemove={imagesToRemove}
-          onToggleExistingImageRemoval={
-            toggleExistingImageRemoval
-          }
+          onToggleExistingImageRemoval={toggleExistingImageRemoval}
         />
       )}
 
@@ -73,11 +83,7 @@ function Items() {
           marginBottom: 16,
         }}
       >
-        <button
-          type="button"
-          onClick={showActiveItems}
-          disabled={!viewDeleted}
-        >
+        <button type="button" onClick={showActiveItems} disabled={!viewDeleted}>
           Active Products
         </button>
 
@@ -90,8 +96,90 @@ function Items() {
         </button>
       </div>
 
+      <div className="filter-section">
+        <h3>Filter Products</h3>
+
+        {/* Price filter */}
+        <div>
+          <label>Minimum Price</label>
+          <input
+            type="number"
+            min="0"
+            placeholder="Min price"
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value)}
+          />
+
+          <label>Maximum Price</label>
+          <input
+            type="number"
+            min="0"
+            placeholder="Max price"
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)}
+          />
+        </div>
+
+        {/* Category filter */}
+        <div>
+          <label>Category</label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+          >
+            <option value="all">All Categories</option>
+
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Ratings filter */}
+        <div>
+          <label>Minimum Rating</label>
+          <select
+            value={minRating}
+            onChange={(e) => setMinRating(e.target.value)}
+          >
+            <option value="0">All Ratings</option>
+            <option value="3">3 Stars & Above</option>
+            <option value="4">4 Stars & Above</option>
+            <option value="5">5 Stars Only</option>
+          </select>
+        </div>
+
+        {/* Review filter */}
+        <div>
+          <label>Reviews</label>
+          <select
+            value={reviewFilter}
+            onChange={(e) => setReviewFilter(e.target.value)}
+          >
+            <option value="all">All Products</option>
+            <option value="reviewed">Has Reviews</option>
+            <option value="10">10 or More Reviews</option>
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMinPrice("");
+            setMaxPrice("");
+            setSelectedCategory("all");
+            setMinRating("0");
+            setReviewFilter("all");
+          }}
+        >
+          Clear Filters
+        </button>
+      </div>
+
       <ItemList
-        items={items}
+        items={filteredItems}
         viewDeleted={viewDeleted}
         selectedItemIds={selectedItemIds}
         bulkDeleting={bulkDeleting}
