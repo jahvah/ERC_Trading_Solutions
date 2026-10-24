@@ -595,6 +595,79 @@ const deleteUser = async (req, res) => {
     }
 }
 
+// Activate or deactivate a user account
+const updateUserStatus = async (req, res) => {
+    try {
+        const { status } = req.body;
+
+        // Validate the requested status
+        if (!['Active', 'Deactivated'].includes(status)) {
+            return res.status(400).json({
+                message: 'Status must be Active or Deactivated.'
+            });
+        }
+
+        const user = await User.findById(req.params.id);
+
+        if (!user || user.deleted_at) {
+            return res.status(404).json({
+                message: 'User not found.'
+            });
+        }
+
+        // Prevent an administrator from deactivating their own account
+        if (
+            String(user._id) === String(req.user.id) &&
+            status === 'Deactivated'
+        ) {
+            return res.status(400).json({
+                message: 'You cannot deactivate your own account.'
+            });
+        }
+
+        // Prevent deactivating the last active administrator
+        if (user.role === 'Admin' && status === 'Deactivated') {
+            const activeAdmins = await User.countDocuments({
+                role: 'Admin',
+                status: 'Active',
+                deleted_at: null
+            });
+
+            if (activeAdmins <= 1) {
+                return res.status(400).json({
+                    message: 'Cannot deactivate the last active administrator.'
+                });
+            }
+        }
+
+        user.status = status;
+        user.updated_at = new Date();
+
+        // Invalidate the saved login token when deactivating
+        if (status === 'Deactivated') {
+            user.token = null;
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: `User account ${status === 'Active' ? 'activated' : 'deactivated'} successfully.`,
+            user: {
+                _id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                status: user.status
+            }
+        });
+    } catch (error) {
+        console.error('Update user status error:', error);
+
+        return res.status(500).json({
+            message: 'Failed to update user status.'
+        });
+    }
+};
 
 const getMyProfile = async (req, res) => {
     try {
@@ -789,6 +862,7 @@ module.exports = {
     loginUser,
     getUsers,
     getUser,
+    updateUserStatus,
     updateUser,
     deleteUser,
     getMyProfile,

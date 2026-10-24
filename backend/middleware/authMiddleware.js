@@ -1,7 +1,9 @@
-const jwt = require('jsonwebtoken')
 
-// Verify user token
-const protect = (req, res, next) => {
+const jwt = require('jsonwebtoken')
+const User = require('../models/userModel')
+
+// Verify token and current account status
+const protect = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization
 
@@ -18,26 +20,51 @@ const protect = (req, res, next) => {
             process.env.JWT_SECRET
         )
 
-        req.user = decoded
+        // Check the current account in the database
+        const user = await User.findById(decoded.id)
+
+        if (
+            !user ||
+            user.deleted_at ||
+            user.status !== 'Active'
+        ) {
+            return res.status(403).json({
+                message: 'Your account is inactive or unavailable.'
+            })
+        }
+
+        // Use the current role from the database
+        req.user = {
+            id: user._id.toString(),
+            role: user.role
+        }
 
         next()
-
     } catch (error) {
-        res.status(401).json({
-            message: 'Invalid or expired token'
+        if (error.name === 'JsonWebTokenError' ||
+            error.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                message: 'Invalid or expired token'
+            })
+        }
+
+        console.error('Authentication error:', error)
+
+        return res.status(500).json({
+            message: 'Authentication failed'
         })
     }
 }
 
-// Check if user is an admin
+// Check whether the current user is an admin
 const admin = (req, res, next) => {
     if (req.user && req.user.role === 'Admin') {
-        next()
-    } else {
-        res.status(403).json({
-            message: 'Admin access required'
-        })
+        return next()
     }
+
+    return res.status(403).json({
+        message: 'Admin access required'
+    })
 }
 
 module.exports = {
