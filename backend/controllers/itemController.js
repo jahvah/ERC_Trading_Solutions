@@ -454,6 +454,49 @@ const restoreItem = async (req, res) => {
     }
 }
 
+//Restore bulk items
+const bulkRestoreItems = async (req, res) => {
+    try {
+        const { ids } = req.body;
+
+        if (
+            !Array.isArray(ids) ||
+            ids.length === 0 ||
+            ids.some((id) => !isValidId(id))
+        ) {
+            return res.status(400).json({
+                message: "Provide a non-empty array of valid item IDs",
+            });
+        }
+
+        const uniqueIds = [...new Set(ids.map(String))];
+
+        const result = await Item.updateMany(
+            {
+                _id: { $in: uniqueIds },
+                deleted_at: { $ne: null },
+            },
+            {
+                $set: {
+                    deleted_at: null,
+                    updated_at: new Date(),
+                },
+            }
+        );
+
+        return res.status(200).json({
+            message: `${result.modifiedCount} item(s) restored successfully`,
+            restoredCount: result.modifiedCount,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error restoring items",
+            error: error.message,
+        });
+    }
+};
+
+
 module.exports = {
     createItem,
     getItems,
@@ -462,5 +505,6 @@ module.exports = {
     deleteItem,
     bulkDeleteItems,
     getDeletedItems,
-    restoreItem
+    restoreItem,
+    bulkRestoreItems
 }

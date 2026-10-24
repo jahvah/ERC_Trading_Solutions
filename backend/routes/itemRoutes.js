@@ -9,7 +9,8 @@ const {
     deleteItem,
     bulkDeleteItems,
     getDeletedItems,
-    restoreItem
+    restoreItem,
+    bulkRestoreItems
 } = require('../controllers/itemController');
 
 const { protect, admin } = require('../middleware/authMiddleware');
@@ -21,14 +22,15 @@ const router = express.Router();
 router.get('/', getItems);
 
 // Admin-only: get deleted products
-// Keep this BEFORE router.get('/:id', getItem)
 router.get('/deleted', protect, admin, getDeletedItems);
 
 // Admin-only: bulk delete products
-// Keep this BEFORE router.delete('/:id', deleteItem)
 router.delete('/bulk', protect, admin, bulkDeleteItems);
 
-// Restore a deleted product
+// Admin-only: bulk restore deleted products
+router.patch('/bulk/restore', protect, admin, bulkRestoreItems);
+
+// Admin-only: restore one deleted product
 router.patch('/:id/restore', protect, admin, restoreItem);
 
 // Get one product
