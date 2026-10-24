@@ -401,11 +401,66 @@ const bulkDeleteItems = async (req, res) => {
     }
 }
 
+// Get soft-deleted products
+const getDeletedItems = async (req, res) => {
+    try {
+        const items = await Item.find({
+            deleted_at: { $ne: null }
+        }).sort({ deleted_at: -1 })
+
+        return res.status(200).json({ items })
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error fetching deleted products",
+            error: error.message
+        })
+    }
+}
+
+// Restore a soft-deleted product
+const restoreItem = async (req, res) => {
+    try {
+        if (!isValidId(req.params.id)) {
+            return res.status(400).json({
+                message: "Invalid item ID"
+            })
+        }
+
+        const item = await Item.findOne({
+            _id: req.params.id,
+            deleted_at: { $ne: null }
+        })
+
+        if (!item) {
+            return res.status(404).json({
+                message: "Deleted product not found"
+            })
+        }
+
+        item.deleted_at = null
+        item.updated_at = new Date()
+
+        await item.save()
+
+        return res.status(200).json({
+            message: "Product restored successfully",
+            item
+        })
+    } catch (error) {
+        return res.status(500).json({
+            message: "Error restoring product",
+            error: error.message
+        })
+    }
+}
+
 module.exports = {
     createItem,
     getItems,
     getItem,
     updateItem,
     deleteItem,
-    bulkDeleteItems
+    bulkDeleteItems,
+    getDeletedItems,
+    restoreItem
 }
