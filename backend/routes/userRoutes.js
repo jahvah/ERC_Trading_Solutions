@@ -19,7 +19,7 @@ const profileUpload = require('../middleware/profileUpload')
 
 const router = express.Router()
 
-// Registration
+// Registration and login
 router.post('/register', registerUser)
 
 router.post(
@@ -28,20 +28,24 @@ router.post(
     completeRegistration
 )
 
-// Login
 router.post('/login', loginUser)
 
-// My Profile
+// Logged-in user's profile
 router.get('/profile', protect, getMyProfile)
-router.put('/profile', protect, updateMyProfile)
 
-// User Management — Admin Only
+router.put(
+    '/profile',
+    protect,
+    profileUpload.single('profile_image'),
+    updateMyProfile
+)
+
+// Admin user management
 router.get('/', protect, admin, getUsers)
 router.get('/:id', protect, admin, getUser)
 router.put('/:id', protect, admin, updateUser)
 router.delete('/:id', protect, admin, deleteUser)
 
-// Activate or Deactivate a User Account — Admin Only
 router.patch('/:id/status', protect, admin, updateUserStatus)
 
 module.exports = router

@@ -1,37 +1,55 @@
+const multer = require('multer')
+const cloudinary = require('cloudinary').v2
+const { CloudinaryStorage } = require('multer-storage-cloudinary-v2')
+const path = require('path')
 
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+})
 
-const uploadDirectory = path.join(__dirname, "../profileUpload");
+const storage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+        folder: 'erc-trading/profiles',
+        allowed_formats: ['jpg', 'jpeg', 'png'],
+        transformation: [
+            {
+                width: 500,
+                height: 500,
+                crop: 'limit',
+                quality: 'auto',
+                fetch_format: 'auto'
+            }
+        ]
+    }
+})
 
-if (!fs.existsSync(uploadDirectory)) {
-    fs.mkdirSync(uploadDirectory, { recursive: true });
+const fileFilter = (req, file, cb) => {
+    const allowedExtensions = ['.jpg', '.jpeg', '.png']
+    const allowedMimeTypes = ['image/jpeg', 'image/png']
+
+    const extension = path.extname(file.originalname).toLowerCase()
+
+    if (
+        !allowedExtensions.includes(extension) ||
+        !allowedMimeTypes.includes(file.mimetype)
+    ) {
+        return cb(
+            new Error('Only JPG, JPEG, and PNG images are allowed.')
+        )
+    }
+
+    cb(null, true)
 }
 
-module.exports = multer({
+const profileUpload = multer({
+    storage,
     limits: {
         fileSize: 5 * 1024 * 1024
     },
-    storage: multer.diskStorage({
-        destination: (req, file, cb) => {
-            cb(null, uploadDirectory);
-        },
-        filename: (req, file, cb) => {
-            const ext = path.extname(file.originalname).toLowerCase();
-            const uniqueName =
-                Date.now() + "-" + Math.round(Math.random() * 1E9) + ext;
+    fileFilter
+})
 
-            cb(null, uniqueName);
-        }
-    }),
-    fileFilter: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-
-        if (![".jpg", ".jpeg", ".png"].includes(ext)) {
-            return cb(new Error("Unsupported file type!"));
-        }
-
-        cb(null, true);
-    }
-});
+module.exports = profileUpload

@@ -120,6 +120,7 @@ const registerUser = async (req, res) => {
 }
 
 
+
 const completeRegistration = async (req, res) => {
     try {
         const {
@@ -135,7 +136,7 @@ const completeRegistration = async (req, res) => {
             town,
             password,
             confirmPassword
-        } = req.body;
+        } = req.body
 
         // Validate registration token
         if (
@@ -144,46 +145,46 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'Please restart registration and try again.'
-            });
+            })
         }
 
         const registrationTokenHash = crypto
             .createHash('sha256')
             .update(registrationToken)
-            .digest('hex');
+            .digest('hex')
 
         const temporaryRegistration =
             await TemporaryRegistration.findOne({
                 registration_token_hash: registrationTokenHash
-            });
+            })
 
         if (!temporaryRegistration) {
             return res.status(400).json({
                 message: 'Registration expired or invalid. Please start again.'
-            });
+            })
         }
 
         if (temporaryRegistration.expires_at <= new Date()) {
             await TemporaryRegistration.deleteOne({
                 _id: temporaryRegistration._id
-            });
+            })
 
             return res.status(400).json({
                 message: 'Registration expired. Please start again.'
-            });
+            })
         }
 
         // Clean up submitted text fields
-        const cleanTitle = String(title || '').trim();
-        const cleanFname = String(fname || '').trim();
-        const cleanLname = String(lname || '').trim();
+        const cleanTitle = String(title || '').trim()
+        const cleanFname = String(fname || '').trim()
+        const cleanLname = String(lname || '').trim()
         const cleanUsername = String(username || '')
             .trim()
-            .toLowerCase();
-        const cleanPhone = String(phone || '').trim();
-        const cleanGender = String(gender || '').trim();
-        const cleanAddressline = String(addressline || '').trim();
-        const cleanTown = String(town || '').trim();
+            .toLowerCase()
+        const cleanPhone = String(phone || '').trim()
+        const cleanGender = String(gender || '').trim()
+        const cleanAddressline = String(addressline || '').trim()
+        const cleanTown = String(town || '').trim()
 
         // Required fields
         if (
@@ -201,14 +202,14 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'Please complete all required fields.'
-            });
+            })
         }
 
         // Validate title
         if (!['Mr.', 'Ms.', 'Mrs.', 'Dr.'].includes(cleanTitle)) {
             return res.status(400).json({
                 message: 'Please select a valid title.'
-            });
+            })
         }
 
         // Validate names
@@ -218,7 +219,7 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'First name and last name cannot exceed 100 characters.'
-            });
+            })
         }
 
         // Validate username
@@ -231,14 +232,14 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'Username must be 3–30 characters and may contain letters, numbers, dots, underscores, and hyphens.'
-            });
+            })
         }
 
         // Validate phone
         if (cleanPhone.length > 30) {
             return res.status(400).json({
                 message: 'Contact number cannot exceed 30 characters.'
-            });
+            })
         }
 
         // Validate address and town
@@ -248,7 +249,7 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'Address line and town cannot exceed 200 characters.'
-            });
+            })
         }
 
         // Validate password
@@ -258,13 +259,13 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'Password must contain at least 8 characters.'
-            });
+            })
         }
 
         if (password !== confirmPassword) {
             return res.status(400).json({
                 message: 'Password and confirm password do not match.'
-            });
+            })
         }
 
         // Validate gender
@@ -274,22 +275,21 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'Please select a valid gender.'
-            });
+            })
         }
 
         // Validate date of birth
-        let parsedDateOfBirth;
-
         if (
             typeof date_of_birth !== 'string' ||
             !/^\d{4}-\d{2}-\d{2}$/.test(date_of_birth)
         ) {
             return res.status(400).json({
                 message: 'Please enter a valid date of birth.'
-            });
+            })
         }
 
-        parsedDateOfBirth = new Date(`${date_of_birth}T00:00:00.000Z`);
+        const parsedDateOfBirth =
+            new Date(`${date_of_birth}T00:00:00.000Z`)
 
         if (
             Number.isNaN(parsedDateOfBirth.getTime()) ||
@@ -297,44 +297,63 @@ const completeRegistration = async (req, res) => {
         ) {
             return res.status(400).json({
                 message: 'Please enter a valid date of birth.'
-            });
+            })
         }
 
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
+        const today = new Date()
+        today.setUTCHours(0, 0, 0, 0)
 
         if (parsedDateOfBirth >= today) {
             return res.status(400).json({
                 message: 'Date of birth must be before today.'
-            });
+            })
         }
 
         // Check for an existing email
         const existingEmail = await User.findOne({
             email: temporaryRegistration.email
-        });
+        })
 
         if (existingEmail) {
             return res.status(409).json({
                 message: 'This email address is already registered. Please log in or use another email address.'
-            });
+            })
         }
 
         // Check for an existing username
         const existingUsername = await User.findOne({
             username: cleanUsername
-        });
+        })
 
         if (existingUsername) {
             return res.status(409).json({
                 message: 'This username is already taken. Please choose another username.'
-            });
+            })
+        }
+
+        // Get the Cloudinary image URL
+        let profileImageUrl = null
+
+        if (req.file) {
+            const imageUrl = req.file.secure_url || req.file.path
+
+            if (
+                !imageUrl ||
+                typeof imageUrl !== 'string' ||
+                !imageUrl.startsWith('https://')
+            ) {
+                return res.status(500).json({
+                    message: 'Profile image upload did not return a valid Cloudinary URL.'
+                })
+            }
+
+            profileImageUrl = imageUrl
         }
 
         // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10)
 
-        let user;
+        let user
 
         try {
             user = await User.create({
@@ -346,7 +365,8 @@ const completeRegistration = async (req, res) => {
                 status: 'Active',
                 registration_completed: true,
 
-                profile_image: req.file ? req.file.filename : null,
+                // Save the full Cloudinary URL, not the public ID.
+                profile_image: profileImageUrl,
 
                 customer: {
                     title: cleanTitle,
@@ -358,21 +378,21 @@ const completeRegistration = async (req, res) => {
                     addressline: cleanAddressline,
                     town: cleanTown
                 }
-            });
+            })
         } catch (error) {
             if (error.code === 11000) {
                 return res.status(409).json({
                     message: 'This email or username is already registered. Please use different details.'
-                });
+                })
             }
 
-            throw error;
+            throw error
         }
 
         // Delete temporary registration after successful account creation
         await TemporaryRegistration.deleteOne({
             _id: temporaryRegistration._id
-        });
+        })
 
         return res.status(201).json({
             message: 'Registration successful! Please log in.',
@@ -381,19 +401,20 @@ const completeRegistration = async (req, res) => {
                 email: user.email,
                 username: user.username,
                 role: user.role,
+                profile_image: user.profile_image,
                 customer: user.customer
             }
-        });
+        })
 
     } catch (error) {
-        console.error('Complete registration error:', error);
+        console.error('Complete registration error:', error)
 
         return res.status(500).json({
             message: 'Error completing registration',
             error: error.message
-        });
+        })
     }
-};
+}
 
 // Login user
 
@@ -488,20 +509,20 @@ const loginUser = async (req, res) => {
 // Get all users
 const getUsers = async (req, res) => {
     try {
-        const users = await User.find()
+        const users = await User.find({
+            deleted_at: null
+        }).select('-password -token -remember_token');
 
-        res.status(200).json({
+        return res.status(200).json({
             users
-        })
-
+        });
     } catch (error) {
-        res.status(500).json({
-            message: 'Error getting users',
+        return res.status(500).json({
+            message: 'Error fetching users',
             error: error.message
-        })
+        });
     }
-}
-
+};
 // Get single user
 const getUser = async (req, res) => {
     try {
@@ -692,6 +713,7 @@ const getMyProfile = async (req, res) => {
     }
 }
 
+
 const updateMyProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user.id)
@@ -826,6 +848,26 @@ const updateMyProfile = async (req, res) => {
             customer[field] = cleanValue || null
         }
 
+        // Save the Cloudinary profile image URL, if a new image was uploaded.
+if (req.file) {
+    console.log('Cloudinary file details:', {
+        path: req.file.path,
+        secure_url: req.file.secure_url,
+        filename: req.file.filename,
+        public_id: req.file.public_id
+    })
+
+    const imageUrl = req.file.secure_url || req.file.path
+
+    if (!imageUrl || !imageUrl.startsWith('https://')) {
+        return res.status(500).json({
+            message: 'Cloudinary did not return a valid image URL.'
+        })
+    }
+
+    user.profile_image = imageUrl
+}
+
         user.customer = customer
         user.updated_at = new Date()
 
@@ -847,7 +889,7 @@ const updateMyProfile = async (req, res) => {
             })
         }
 
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Failed to update profile. Please try again.'
         })
     }
