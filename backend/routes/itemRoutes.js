@@ -1,3 +1,4 @@
+
 const express = require('express')
 
 const {
@@ -5,15 +6,23 @@ const {
     getItems,
     getItem,
     updateItem,
-    deleteItem
+    deleteItem,
+    bulkDeleteItems
 } = require('../controllers/itemController')
+
+const { protect, admin } = require('../middleware/authMiddleware')
+const upload = require('../middleware/uploadMiddleware')
 
 const router = express.Router()
 
-router.post('/', createItem)
+// Public product browsing
 router.get('/', getItems)
 router.get('/:id', getItem)
-router.put('/:id', updateItem)
-router.delete('/:id', deleteItem)
+
+// Admin-only product management
+router.post('/', protect, admin, upload.array('images', 10), createItem)
+router.put('/:id', protect, admin, upload.array('images', 10), updateItem)
+router.delete('/bulk', protect, admin, bulkDeleteItems)
+router.delete('/:id', protect, admin, deleteItem)
 
 module.exports = router

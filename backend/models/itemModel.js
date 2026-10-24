@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose')
 
 const itemSchema = new mongoose.Schema({
@@ -36,6 +37,11 @@ const itemSchema = new mongoose.Schema({
             image_path: {
                 type: String,
                 required: true
+            },
+
+            public_id: {
+                type: String,
+                default: null
             },
 
             created_at: {
@@ -87,6 +93,11 @@ const itemSchema = new mongoose.Schema({
                     image_path: {
                         type: String,
                         required: true
+                    },
+
+                    public_id: {
+                        type: String,
+                        default: null
                     },
 
                     created_at: {
