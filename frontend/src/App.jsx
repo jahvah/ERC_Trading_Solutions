@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Register from "./pages/Register";
@@ -23,16 +22,10 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Home */}
-        <Route
-          path="/"
-          element={<h1>ERC Trading Solutions</h1>}
-        />
+        <Route path="/" element={<h1>ERC Trading Solutions</h1>} />
 
         {/* Registration */}
-        <Route
-          path="/register"
-          element={<Register />}
-        />
+        <Route path="/register" element={<Register />} />
 
         <Route
           path="/complete-registration"
@@ -40,10 +33,7 @@ function App() {
         />
 
         {/* Login */}
-        <Route
-          path="/login"
-          element={<Login />}
-        />
+        <Route path="/login" element={<Login />} />
 
         {/* Customer Profile */}
         <Route
