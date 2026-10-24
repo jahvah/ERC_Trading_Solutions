@@ -39,6 +39,7 @@ function useItems() {
 
   const [viewDeleted, setViewDeleted] = useState(false);
 
+const [searchTerm, setSearchTerm] = useState("");
 const [minPrice, setMinPrice] = useState("");
 const [maxPrice, setMaxPrice] = useState("");
 const [selectedCategory, setSelectedCategory] = useState("all");
@@ -471,6 +472,18 @@ const categories = useMemo(() => {
 // Apply all product filters.
 const filteredItems = useMemo(() => {
   return items.filter((item) => {
+
+    // Search by item name or description
+const search = searchTerm.toLowerCase().trim();
+
+const matchesSearch =
+  (item.item_name || "").toLowerCase().includes(search) ||
+  (item.description || "").toLowerCase().includes(search);
+
+if (!matchesSearch) {
+  return false;
+}
+
     const price = Number(item.sell_price) || 0;
 
     const activeReviews = (item.reviews || []).filter(
@@ -529,6 +542,7 @@ const filteredItems = useMemo(() => {
   });
 }, [
   items,
+  searchTerm,
   minPrice,
   maxPrice,
   selectedCategory,
@@ -567,18 +581,20 @@ const filteredItems = useMemo(() => {
     handleRestore,
     handleBulkRestore,
 
+    searchTerm,
+    setSearchTerm,
     filteredItems,
-categories,
-minPrice,
-setMinPrice,
-maxPrice,
-setMaxPrice,
-selectedCategory,
-setSelectedCategory,
-minRating,
-setMinRating,
-reviewFilter,
-setReviewFilter
+    categories,
+    minPrice,
+    setMinPrice,
+    maxPrice,
+    setMaxPrice,
+    selectedCategory,
+    setSelectedCategory,
+    minRating,
+    setMinRating,
+    reviewFilter,
+    setReviewFilter
 
   };
 }

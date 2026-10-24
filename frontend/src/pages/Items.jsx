@@ -34,6 +34,8 @@ function Items() {
     handleRestore,
     handleBulkRestore,
 
+    searchTerm,
+    setSearchTerm,
     filteredItems,
     categories,
     minPrice,
@@ -94,6 +96,18 @@ function Items() {
         >
           Deleted Products
         </button>
+      </div>
+
+      <div className="item-search">
+        <label htmlFor="item-search">Search Items</label>
+
+        <input
+          id="item-search"
+          type="search"
+          placeholder="Search by item name or description..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
 
       <div className="filter-section">
