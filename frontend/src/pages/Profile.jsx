@@ -21,7 +21,6 @@ function Profile() {
     error,
     setMessage,
     setError,
-    handleChange,
     saveProfile,
     uploadImage,
     startEditing,
@@ -47,7 +46,9 @@ function Profile() {
 
         <main style={styles.card}>
           <h1>My Profile</h1>
-          <p style={styles.error}>{error || "Unable to load your profile."}</p>
+          <p style={styles.error}>
+            {error || "Unable to load your profile."}
+          </p>
 
           <button
             type="button"
@@ -98,7 +99,6 @@ function Profile() {
           formData={formData}
           editing={editing}
           saving={saving}
-          onChange={handleChange}
           onSubmit={saveProfile}
           onEdit={startEditing}
           onCancel={cancelEditing}

@@ -1,87 +1,142 @@
 
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import api from '../services/api'
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Formik, Form, Field, ErrorMessage } from "formik";
+import * as Yup from "yup";
+import api from "../services/api";
+
+const registerSchema = Yup.object({
+  email: Yup.string()
+    .trim()
+    .email("Please enter a valid email address.")
+    .required("Email address is required.")
+    .max(254, "Email address is too long."),
+});
 
 function Register() {
-    const [email, setEmail] = useState('')
-    const [message, setMessage] = useState('')
-    const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    const navigate = useNavigate()
+  const navigate = useNavigate();
 
-    const handleSubmit = async (e) => {
-        e.preventDefault()
+  const handleSubmit = async (values) => {
+    setMessage("");
+    setLoading(true);
 
-        setMessage('')
-        setLoading(true)
+    try {
+      const normalizedEmail = values.email.trim().toLowerCase();
 
-        try {
-            const normalizedEmail = email.trim().toLowerCase()
+      const response = await api.post("/users/register", {
+        email: normalizedEmail,
+      });
 
-            const response = await api.post('/users/register', {
-                email: normalizedEmail
-            })
+      const registrationToken = response.data.registrationToken;
 
-            // Save the registration token returned by the backend.
-            sessionStorage.setItem(
-                'registrationToken',
-                response.data.registrationToken
-            )
+      if (!registrationToken) {
+        throw new Error(
+          "Registration token was not returned by the server."
+        );
+      }
 
-            sessionStorage.setItem(
-                'registrationEmail',
-                normalizedEmail
-            )
+      // Save the registration details for the next step.
+      sessionStorage.setItem(
+        "registrationToken",
+        registrationToken
+      );
 
-            navigate('/complete-registration')
-        } catch (error) {
-            setMessage(
-                error.response?.data?.message ||
-                'Unable to start registration. Please try again.'
-            )
-        } finally {
-            setLoading(false)
-        }
+      sessionStorage.setItem(
+        "registrationEmail",
+        normalizedEmail
+      );
+
+      navigate("/complete-registration");
+    } catch (error) {
+      console.error("Registration error:", error);
+
+      setMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Unable to start registration. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-        <div>
-            <h1>Create an Account</h1>
+  return (
+    <div>
+      <h1>Create an Account</h1>
 
-            <p>Enter your email address to get started.</p>
+      <p>Enter your email address to get started.</p>
 
-            <form onSubmit={handleSubmit}>
-                <div>
-                    <label htmlFor="email">
-                        Email Address
-                    </label>
+      <Formik
+        initialValues={{
+          email: "",
+        }}
+        validationSchema={registerSchema}
+        onSubmit={handleSubmit}
+      >
+        {({ errors, touched }) => (
+          <Form noValidate>
+            <div>
+              <label htmlFor="email">
+                Email Address
+              </label>
 
-                    <input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        autoComplete="email"
-                        required
-                    />
-                </div>
+              <Field
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                aria-invalid={Boolean(
+                  touched.email && errors.email
+                )}
+                aria-describedby={
+                  touched.email && errors.email
+                    ? "email-error"
+                    : undefined
+                }
+                disabled={loading}
+              />
 
-                <button type="submit" disabled={loading}>
-                    {loading ? 'Please wait...' : 'Continue'}
-                </button>
-            </form>
+              <ErrorMessage name="email">
+                {(errorMessage) => (
+                  <p
+                    id="email-error"
+                    role="alert"
+                    style={{
+                      color: "#b91c1c",
+                      marginTop: "5px",
+                    }}
+                  >
+                    {errorMessage}
+                  </p>
+                )}
+              </ErrorMessage>
+            </div>
 
-            {message && (
-                <p role="alert">{message}</p>
-            )}
+            <button
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? "Please wait..." : "Continue"}
+            </button>
+          </Form>
+        )}
+      </Formik>
 
-            <p>
-                Already have an account?{' '}
-                <a href="/login">Log in</a>
-            </p>
-        </div>
-    )
+      {message && (
+        <p role="alert" style={{ color: "#b91c1c" }}>
+          {message}
+        </p>
+      )}
+
+      <p>
+        Already have an account?{" "}
+        <Link to="/login">Log in</Link>
+      </p>
+    </div>
+  );
 }
 
-export default Register
+export default Register;

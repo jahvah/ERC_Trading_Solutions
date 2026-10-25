@@ -27,12 +27,30 @@ function getCustomerForm(user) {
     lname: customer.lname || "",
     phone: customer.phone || "",
     gender: customer.gender || "",
-    date_of_birth: customer.date_of_birth
-      ? new Date(customer.date_of_birth).toISOString().slice(0, 10)
-      : "",
+    date_of_birth: formatDateForInput(customer.date_of_birth),
     addressline: customer.addressline || "",
     town: customer.town || "",
   };
+}
+
+function formatDateForInput(value) {
+  if (!value) return "";
+
+  // A date-only string from MongoDB should stay a date-only string.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    return String(value);
+  }
+
+  // For timestamps, use the local calendar date instead of UTC.
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function saveUserLocally(user) {
@@ -79,7 +97,10 @@ export default function useProfile() {
     } catch (err) {
       console.error("Fetch profile error:", err);
       setError(
-        getErrorMessage(err, "Unable to load your profile. Please try again.")
+        getErrorMessage(
+          err,
+          "Unable to load your profile. Please try again."
+        )
       );
     } finally {
       setLoading(false);
@@ -90,6 +111,7 @@ export default function useProfile() {
     fetchProfile();
   }, [fetchProfile]);
 
+  // Retained for compatibility with any other existing consumers.
   const handleChange = (event) => {
     const { name, value } = event.target;
 
@@ -102,24 +124,26 @@ export default function useProfile() {
     setError("");
   };
 
-  const saveProfile = async (event) => {
-    event.preventDefault();
-
+  // Formik passes validated values directly to this function.
+  const saveProfile = async (values) => {
     if (saving) return;
 
+    const submittedValues = values || formData;
     const original = user?.customer || {};
     const changedFields = {};
 
     editableFields.forEach((field) => {
-      const originalValue =
-        field === "date_of_birth" && original[field]
-          ? new Date(original[field]).toISOString().slice(0, 10)
-          : String(original[field] ?? "");
+const originalValue =
+  field === "date_of_birth"
+    ? formatDateForInput(original[field])
+    : String(original[field] ?? "");
 
-      const currentValue = String(formData[field] ?? "").trim();
+      const currentValue = String(
+        submittedValues[field] ?? ""
+      ).trim();
 
-      // Preserve existing data when an already-filled field
-      // is left blank, matching the original Profile.jsx logic.
+      // Preserve existing behavior: a blank value doesn't erase
+      // an already-filled field.
       if (currentValue === "" && originalValue !== "") {
         return;
       }
@@ -154,7 +178,10 @@ export default function useProfile() {
     } catch (err) {
       console.error("Update profile error:", err);
       setError(
-        getErrorMessage(err, "Unable to update your profile. Please try again.")
+        getErrorMessage(
+          err,
+          "Unable to update your profile. Please try again."
+        )
       );
 
       return false;
@@ -183,7 +210,9 @@ export default function useProfile() {
       setUser(updatedUser);
       saveUserLocally(updatedUser);
 
-      setMessage(response.message || "Profile picture updated successfully.");
+      setMessage(
+        response.message || "Profile picture updated successfully."
+      );
       setError("");
 
       return true;
