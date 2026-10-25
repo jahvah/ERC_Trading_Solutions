@@ -1,5 +1,6 @@
 const Item = require('../models/itemModel')
 const Order = require('../models/orderModel')
+const maskBadWords = require('../utils/profanityFilter')
 
 // Create review
 const createReview = async (req, res) => {
@@ -12,14 +13,49 @@ const createReview = async (req, res) => {
             review_text
         } = req.body
 
+        // Validate item ID
+        if (!item_id) {
+            return res.status(400).json({
+                message: 'Item ID is required'
+            })
+        }
+
+        // Validate review text
+        if (
+            typeof review_text !== 'string' ||
+            !review_text.trim()
+        ) {
+            return res.status(400).json({
+                message: 'Review text is required'
+            })
+        }
+
+        // Validate rating
+        const numericRating = Number(rating)
+
+        if (
+            rating === undefined ||
+            rating === null ||
+            rating === '' ||
+            !Number.isInteger(numericRating) ||
+            numericRating < 1 ||
+            numericRating > 5
+        ) {
+            return res.status(400).json({
+                message: 'Rating must be a whole number between 1 and 5'
+            })
+        }
+
+        // Find item
         const item = await Item.findById(item_id)
 
-        if (!item || item.deleted_at !== null) {
+        if (!item || item.deleted_at != null) {
             return res.status(404).json({
                 message: 'Item not found'
             })
         }
 
+        // Check whether the customer ordered this item
         const order = await Order.findOne({
             customer: userId,
             'order_lines.item': item_id,
@@ -32,31 +68,36 @@ const createReview = async (req, res) => {
             })
         }
 
-        if (rating < 1 || rating > 5) {
-            return res.status(400).json({
-                message: 'Rating must be between 1 and 5'
-            })
-        }
+        // Mask profanity before saving the review
+        const cleanedReviewText = maskBadWords(
+            review_text.trim()
+        )
 
+        // Save review
         item.reviews.push({
             customer: userId,
-            rating: Number(rating),
-            review_text
+            rating: numericRating,
+            review_text: cleanedReviewText
         })
 
         item.updated_at = Date.now()
 
         await item.save()
 
-        res.status(201).json({
+        const savedReview = item.reviews[
+            item.reviews.length - 1
+        ]
+
+        return res.status(201).json({
             message: 'Review created successfully',
-            review: item.reviews[item.reviews.length - 1]
+            review: savedReview
         })
 
     } catch (error) {
-        res.status(500).json({
-            message: 'Error creating review',
-            error: error.message
+        console.error('Create review error:', error)
+
+        return res.status(500).json({
+            message: 'Error creating review'
         })
     }
 }
@@ -66,14 +107,13 @@ const getAllReviews = async (req, res) => {
     try {
         const items = await Item.find({
             deleted_at: null
-        })
-            .populate('reviews.customer')
+        }).populate('reviews.customer')
 
         const reviews = []
 
         items.forEach((item) => {
             item.reviews.forEach((review) => {
-                if (review.deleted_at === null) {
+                if (review.deleted_at == null) {
                     reviews.push({
                         _id: review._id,
                         item: {
@@ -90,15 +130,16 @@ const getAllReviews = async (req, res) => {
             })
         })
 
-        res.status(200).json({
+        return res.status(200).json({
             message: 'Reviews retrieved successfully',
             reviews
         })
 
     } catch (error) {
-        res.status(500).json({
-            message: 'Error getting reviews',
-            error: error.message
+        console.error('Get reviews error:', error)
+
+        return res.status(500).json({
+            message: 'Error getting reviews'
         })
     }
 }
@@ -118,26 +159,26 @@ const deleteReview = async (req, res) => {
 
         const review = item.reviews.id(req.params.id)
 
-        if (!review || review.deleted_at !== null) {
+        if (!review || review.deleted_at != null) {
             return res.status(404).json({
                 message: 'Review not found'
             })
         }
 
-        review.deleted_at = Date.now()
-
-        item.updated_at = Date.now()
+        review.deleted_at = new Date()
+        item.updated_at = new Date()
 
         await item.save()
 
-        res.status(200).json({
+        return res.status(200).json({
             message: 'Review deleted successfully'
         })
 
     } catch (error) {
-        res.status(500).json({
-            message: 'Error deleting review',
-            error: error.message
+        console.error('Delete review error:', error)
+
+        return res.status(500).json({
+            message: 'Error deleting review'
         })
     }
 }

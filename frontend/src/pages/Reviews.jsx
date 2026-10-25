@@ -1,64 +1,56 @@
+
 import { useEffect, useState } from 'react'
-import { Link } from "react-router-dom";
 import api from '../services/api'
 import { getToken } from '../utils/auth'
-import CustomerNavbar from "../components/CustomerNavbar";
+import CustomerNavbar from '../components/CustomerNavbar'
+import ReviewForm from '../components/reviews/ReviewForm'
 
 function Reviews() {
     const [orders, setOrders] = useState([])
     const [message, setMessage] = useState('')
-    const [reviewData, setReviewData] = useState({})
+    const [loading, setLoading] = useState(true)
+    const [submittingKey, setSubmittingKey] = useState(null)
+
+    // Track reviews separately for each order-item combination.
+    const [submittedReviews, setSubmittedReviews] = useState({})
 
     useEffect(() => {
+        const getOrders = async () => {
+            try {
+                const response = await api.get('/orders', {
+                    headers: {
+                        Authorization: `Bearer ${getToken()}`
+                    }
+                })
+
+                setOrders(response.data.orders || [])
+            } catch (error) {
+                setMessage(
+                    error.response?.data?.message ||
+                    'Failed to get orders'
+                )
+            } finally {
+                setLoading(false)
+            }
+        }
+
         getOrders()
     }, [])
 
-    const getOrders = async () => {
+    const submitReview = async (orderId, itemId, values) => {
+        const key = `${orderId}:${itemId}`
+
         try {
-            const response = await api.get('/orders', {
-                headers: {
-                    Authorization: `Bearer ${getToken()}`
-                }
-            })
-
-            setOrders(response.data.orders)
-
-        } catch (error) {
-            setMessage(
-                error.response?.data?.message ||
-                'Failed to get orders'
-            )
-        }
-    }
-
-    const handleChange = (itemId, field, value) => {
-        setReviewData({
-            ...reviewData,
-            [itemId]: {
-                ...reviewData[itemId],
-                [field]: value
-            }
-        })
-    }
-
-    const submitReview = async (itemId) => {
-        try {
-            const review = reviewData[itemId]
-
-            if (!review?.rating || !review?.review_text) {
-                setMessage(
-                    'Please enter a rating and review'
-                )
-
-                return
-            }
+            setSubmittingKey(key)
+            setMessage('')
 
             const response = await api.post(
                 '/reviews',
                 {
+                    order_id: orderId,
                     item_id: itemId,
-                    rating: Number(review.rating),
-                    review_text: review.review_text
+                    rating: values.rating,
+                    review_text: values.review_text
                 },
                 {
                     headers: {
@@ -67,154 +59,100 @@ function Reviews() {
                 }
             )
 
-            setMessage(response.data.message)
+            setSubmittedReviews((previous) => ({
+                ...previous,
+                [key]: response.data.review || values
+            }))
 
-            setReviewData({
-                ...reviewData,
-                [itemId]: {
-                    rating: '',
-                    review_text: ''
-                }
-            })
-
+            setMessage(response.data.message || 'Review submitted successfully')
         } catch (error) {
             setMessage(
                 error.response?.data?.message ||
                 'Failed to submit review'
             )
+        } finally {
+            setSubmittingKey(null)
         }
     }
 
-    const reviewedItems = new Set()
+    if (loading) {
+        return (
+            <>
+                <CustomerNavbar />
+                <p>Loading orders...</p>
+            </>
+        )
+    }
 
     return (
-        <div>
-
+        <>
             <CustomerNavbar />
-            
-            <h1>Reviews</h1>
 
-            {message && (
-                <p>{message}</p>
-            )}
+            <main>
+                <h1>Reviews</h1>
 
-            {orders.length === 0 && (
-                <p>
-                    You have no orders to review.
-                </p>
-            )}
+                {message && <p role="status">{message}</p>}
 
-            {orders.map((order) => (
-                <div key={order._id}>
-                    {order.order_lines.map((line) => {
-                        const item = line.item
+                {orders.length === 0 && (
+                    <p>You have no orders to review.</p>
+                )}
 
-                        if (!item) {
-                            return null
-                        }
+                {orders.map((order) => (
+                    <section key={order._id}>
+                        <h2>Order #{order._id}</h2>
 
-                        if (reviewedItems.has(item._id)) {
-                            return null
-                        }
+                        {order.order_lines?.map((line, index) => {
+                            const item = line.item
 
-                        reviewedItems.add(item._id)
+                            if (!item) return null
 
-                        return (
-                            <div key={item._id}>
-                                <h2>
-                                    {item.item_name}
-                                </h2>
+                            const key = `${order._id}:${item._id}`
+                            const submittedReview = submittedReviews[key]
 
-                                <p>
-                                    Quantity ordered: {
-                                        line.quantity
-                                    }
-                                </p>
+                            return (
+                                <article key={`${key}:${index}`}>
+                                    <h3>{item.item_name}</h3>
 
-                                <div>
-                                    <label>
-                                        Rating:
-                                    </label>
+                                    <p>
+                                        Quantity ordered: {line.quantity}
+                                    </p>
 
-                                    <select
-                                        value={
-                                            reviewData[
-                                                item._id
-                                            ]?.rating || ''
-                                        }
-                                        onChange={(e) =>
-                                            handleChange(
-                                                item._id,
-                                                'rating',
-                                                e.target.value
-                                            )
-                                        }
-                                    >
-                                        <option value="">
-                                            Select rating
-                                        </option>
+                                    {submittedReview ? (
+                                        <div>
+                                            <p>Review submitted for this order.</p>
+                                            <p>
+                                                Rating: {submittedReview.rating}
+                                            </p>
+                                            <p>
+                                                {submittedReview.review_text}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <ReviewForm
+                                            key={key}
+                                            onSubmit={(values) =>
+                                                submitReview(
+                                                    order._id,
+                                                    item._id,
+                                                    values
+                                                )
+                                            }
+                                            submitLabel={
+                                                submittingKey === key
+                                                    ? 'Submitting...'
+                                                    : 'Review Item'
+                                            }
+                                        />
+                                    )}
 
-                                        <option value="1">
-                                            1 - Poor
-                                        </option>
-
-                                        <option value="2">
-                                            2 - Fair
-                                        </option>
-
-                                        <option value="3">
-                                            3 - Good
-                                        </option>
-
-                                        <option value="4">
-                                            4 - Very Good
-                                        </option>
-
-                                        <option value="5">
-                                            5 - Excellent
-                                        </option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label>
-                                        Review:
-                                    </label>
-
-                                    <textarea
-                                        value={
-                                            reviewData[
-                                                item._id
-                                            ]?.review_text || ''
-                                        }
-                                        onChange={(e) =>
-                                            handleChange(
-                                                item._id,
-                                                'review_text',
-                                                e.target.value
-                                            )
-                                        }
-                                        placeholder="Write your review"
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={() =>
-                                        submitReview(
-                                            item._id
-                                        )
-                                    }
-                                >
-                                    Submit Review
-                                </button>
-
-                                <hr />
-                            </div>
-                        )
-                    })}
-                </div>
-            ))}
-        </div>
+                                    <hr />
+                                </article>
+                            )
+                        })}
+                    </section>
+                ))}
+            </main>
+        </>
     )
 }
 
