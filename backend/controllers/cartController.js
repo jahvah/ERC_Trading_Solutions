@@ -31,6 +31,9 @@ const getCart = async (req, res) => {
 }
 
 // Add item to cart
+
+
+ // Add item to cart
 const addToCart = async (req, res) => {
     try {
         const userId = req.user.id
@@ -40,18 +43,42 @@ const addToCart = async (req, res) => {
             quantity
         } = req.body
 
+        // Find the item
         const item = await Item.findById(item_id)
 
-        if (!item || item.deleted_at !== null) {
+        if (!item || item.deleted_at != null) {
             return res.status(404).json({
                 message: 'Item not found'
             })
         }
 
+        // Validate quantity
+        const requestedQuantity = Number(quantity)
+
+        if (
+            !Number.isInteger(requestedQuantity) ||
+            requestedQuantity < 1
+        ) {
+            return res.status(400).json({
+                message: 'Quantity must be a positive integer'
+            })
+        }
+
+        // Check if the requested quantity exceeds available stock
+        const availableStock = item.stock?.quantity ?? 0
+
+        if (requestedQuantity > availableStock) {
+            return res.status(400).json({
+                message: `Only ${availableStock} unit(s) are available`
+            })
+        }
+
+        // Find the user's cart
         let cart = await Cart.findOne({
             user: userId
         })
 
+        // Create a cart if one does not exist
         if (!cart) {
             cart = await Cart.create({
                 user: userId,
@@ -59,39 +86,57 @@ const addToCart = async (req, res) => {
             })
         }
 
+        // Check whether the item already exists in the cart
         const existingItem = cart.items.find(
             (cartItem) =>
                 cartItem.item.toString() === item_id
         )
 
-        if (existingItem) {
-            existingItem.quantity += Number(quantity)
-        } else {
-            cart.items.push({
-                item: item_id,
-                quantity: Number(quantity)
+        // Calculate the total quantity after adding the item
+        const cartQuantity = existingItem
+            ? existingItem.quantity + requestedQuantity
+            : requestedQuantity
+
+        // Prevent the cart quantity from exceeding available stock
+        if (cartQuantity > availableStock) {
+            return res.status(400).json({
+                message: `You can only have ${availableStock} unit(s) of this product in your cart`
             })
         }
 
+        // Update the existing cart item or add a new one
+        if (existingItem) {
+            existingItem.quantity = cartQuantity
+        } else {
+            cart.items.push({
+                item: item_id,
+                quantity: requestedQuantity
+            })
+        }
+
+        // Update cart timestamp
         cart.updated_at = Date.now()
 
+        // Save the cart
         await cart.save()
 
+        // Populate item details
         cart = await Cart.findById(cart._id)
             .populate('items.item')
 
-        res.status(200).json({
+        return res.status(200).json({
             message: 'Item added to cart successfully',
             cart
         })
 
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Error adding item to cart',
             error: error.message
         })
     }
 }
+
 
 // Update cart item quantity
 const updateCartItem = async (req, res) => {
