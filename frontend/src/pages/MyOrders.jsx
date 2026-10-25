@@ -1,92 +1,54 @@
-import { useEffect, useState } from 'react'
-import { Link } from "react-router-dom";
-import api from '../services/api'
-import { getToken } from '../utils/auth'
-import CustomerNavbar from "../components/CustomerNavbar";
+
+import CustomerNavbar from '../components/CustomerNavbar'
+import MyOrdersList from '../components/orders/MyOrdersList'
+import useMyOrders from '../hooks/useMyOrders'
 
 function MyOrders() {
-    const [orders, setOrders] = useState([])
-    const [message, setMessage] = useState('')
-
-    useEffect(() => {
-        getOrders()
-    }, [])
-
-    const getOrders = async () => {
-        try {
-            const response = await api.get('/orders', {
-                headers: {
-                    Authorization: `Bearer ${getToken()}`
-                }
-            })
-
-            setOrders(response.data.orders)
-
-        } catch (error) {
-            setMessage(
-                error.response?.data?.message ||
-                'Failed to get orders'
-            )
-        }
-    }
+    const {
+        orders,
+        loading,
+        cancellingId,
+        error,
+        message,
+        cancelOrder
+    } = useMyOrders()
 
     return (
-        <div>
+        <div className="min-h-screen bg-gray-50">
+            <CustomerNavbar />
 
-             <CustomerNavbar />
-             
-            <h1>My Orders</h1>
+            <main className="mx-auto max-w-4xl px-4 py-8">
+                <h1 className="mb-6 text-2xl font-bold">
+                    My Orders
+                </h1>
 
-            {message && (
-                <p>{message}</p>
-            )}
+                {error && (
+                    <div
+                        role="alert"
+                        className="mb-4 rounded-md bg-red-100 p-3 text-red-800"
+                    >
+                        {error}
+                    </div>
+                )}
 
-            {orders.length === 0 && !message && (
-                <p>You have no orders yet.</p>
-            )}
+                {message && (
+                    <div
+                        role="status"
+                        className="mb-4 rounded-md bg-green-100 p-3 text-green-800"
+                    >
+                        {message}
+                    </div>
+                )}
 
-            {orders.map((order) => (
-                <div key={order._id}>
-                    <h2>
-                        Order ID: {order._id}
-                    </h2>
-
-                    <p>
-                        Date Placed: {
-                            new Date(
-                                order.date_placed
-                            ).toLocaleString()
-                        }
-                    </p>
-
-                    <p>
-                        Status: {order.status}
-                    </p>
-
-                    <h3>Order Items</h3>
-
-                    {order.order_lines.map((line) => (
-                        <div key={line._id}>
-                            <p>
-                                Item: {line.item?.item_name}
-                            </p>
-
-                            <p>
-                                Quantity: {line.quantity}
-                            </p>
-
-                            <p>
-                                Price: {line.price}
-                            </p>
-                        </div>
-                    ))}
-
-                    <hr />
-                </div>
-            ))}
+                <MyOrdersList
+                    orders={orders}
+                    loading={loading}
+                    cancellingId={cancellingId}
+                    onCancel={cancelOrder}
+                />
+            </main>
         </div>
     )
 }
 
 export default MyOrders
-
