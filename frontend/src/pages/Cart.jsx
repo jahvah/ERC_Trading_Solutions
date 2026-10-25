@@ -1,10 +1,6 @@
-
 import { Link } from 'react-router-dom'
-
 import CustomerNavbar from '../components/CustomerNavbar'
 import CartItem from '../components/cart/CartItem'
-import CartSummary from '../components/cart/CartSummary'
-import EmptyCart from '../components/cart/EmptyCart'
 import useCart from '../hooks/useCart'
 
 function Cart() {
@@ -16,9 +12,9 @@ function Cart() {
         messageType,
         setMessage,
         totalQuantity,
+        totalSubtotal,
         selectedQuantity,
         selectedSubtotal,
-        selectedItems,
         allSelected,
         hasUnavailableItems,
         updatingItemId,
@@ -33,14 +29,17 @@ function Cart() {
         checkoutSelected
     } = useCart()
 
+    const formatPrice = amount =>
+        Number(amount || 0).toLocaleString('en-PH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+
     const handleCheckout = async () => {
-        if (!selectedItems.length) {
-            setMessage('Please select at least one product.')
-            return
-        }
+        if (selectedItemIds.length === 0) return
 
         const confirmed = window.confirm(
-            `Check out ${selectedItems.length} selected product(s)?`
+            `Proceed to checkout ${selectedQuantity} item(s) for ₱${formatPrice(selectedSubtotal)}?`
         )
 
         if (confirmed) {
@@ -49,94 +48,25 @@ function Cart() {
     }
 
     return (
-        <div style={styles.page}>
-            <style>{`
-                .cart-layout {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-                    align-items: start;
-                    gap: 28px;
-                }
-
-                .cart-summary-column {
-                    position: sticky;
-                    top: 20px;
-                }
-
-                @media (max-width: 900px) {
-                    .cart-layout {
-                        grid-template-columns: minmax(0, 1fr);
-                    }
-
-                    .cart-summary-column {
-                        position: static;
-                    }
-                }
-
-                @media (max-width: 600px) {
-                    .cart-container {
-                        padding: 20px 12px 40px !important;
-                    }
-
-                    .cart-item-card {
-                        gap: 10px !important;
-                        padding: 12px !important;
-                    }
-
-                    .cart-item-image {
-                        width: 76px !important;
-                        height: 76px !important;
-                    }
-
-                    .cart-item-name {
-                        font-size: 15px !important;
-                    }
-
-                    .cart-item-top-row {
-                        flex-wrap: wrap;
-                    }
-
-                    .cart-bulk-actions {
-                        align-items: stretch !important;
-                        flex-direction: column;
-                    }
-                }
-            `}</style>
-
+        <>
             <CustomerNavbar />
 
-            <main className="cart-container" style={styles.container}>
-                <p style={styles.breadcrumb}>
-                    <Link to="/shop" style={styles.link}>Shop</Link>
-                    {' / Shopping Cart'}
-                </p>
-
-                <header style={styles.header}>
-                    <div>
-                        <h1 style={styles.title}>Shopping Cart</h1>
-                        <p style={styles.subtitle}>
-                            Select the products you want to purchase.
-                        </p>
-                    </div>
-
-                    <span style={styles.count}>
-                        {totalQuantity} {totalQuantity === 1 ? 'item' : 'items'} in cart
-                    </span>
+            <main className="cart-page">
+                <header className="cart-page-header">
+                    <h1>My Shopping Cart</h1>
+                    <p>Review your items before checkout.</p>
                 </header>
 
                 {message && (
                     <div
+                        className={`cart-message ${messageType}`}
                         role="status"
-                        style={{
-                            ...styles.message,
-                            ...(messageType === 'error' ? styles.error : {})
-                        }}
                     >
                         <span>{message}</span>
                         <button
                             type="button"
                             onClick={() => setMessage('')}
-                            style={styles.dismiss}
+                            aria-label="Dismiss message"
                         >
                             ×
                         </button>
@@ -144,225 +74,329 @@ function Cart() {
                 )}
 
                 {loading ? (
-                    <p style={styles.loading}>Loading your cart...</p>
+                    <p className="cart-loading">Loading your cart...</p>
                 ) : cartItems.length === 0 ? (
-                    <EmptyCart />
+                    <section className="cart-empty">
+                        <h2>Your cart is empty</h2>
+                        <p>Add products from the shop to get started.</p>
+                        <Link to="/shop" className="cart-shop-link">
+                            Browse Shop
+                        </Link>
+                    </section>
                 ) : (
-                    <>
-                        <div className="cart-bulk-actions" style={styles.bulkActions}>
-                            <label style={styles.selectAll}>
-                                <input
-                                    type="checkbox"
-                                    checked={allSelected}
-                                    onChange={toggleSelectAll}
-                                    style={styles.checkbox}
-                                />
-                                Select All
-                            </label>
+                    <div className="cart-layout">
+                        <section className="cart-list-section">
+                            <div className="cart-list-toolbar">
+                                <label className="cart-select-all">
+                                    <input
+                                        type="checkbox"
+                                        checked={allSelected}
+                                        onChange={toggleSelectAll}
+                                    />
+                                    Select all ({cartItems.length})
+                                </label>
 
-                            <span style={styles.selectionCount}>
-                                {selectedItemIds.length} selected
-                            </span>
+                                <button
+                                    type="button"
+                                    className="cart-delete-selected"
+                                    onClick={deleteSelectedItems}
+                                    disabled={
+                                        selectedItemIds.length === 0 ||
+                                        deletingSelected ||
+                                        checkingOut
+                                    }
+                                >
+                                    {deletingSelected
+                                        ? 'Deleting...'
+                                        : `Delete selected (${selectedItemIds.length})`}
+                                </button>
+                            </div>
+
+                            {cartItems.map(cartItem => {
+                                const itemId = cartItem.item?._id
+                                const id = String(itemId || cartItem._id)
+
+                                return (
+                                    <CartItem
+                                        key={id}
+                                        cartItem={cartItem}
+                                        selected={selectedItemIds.includes(id)}
+                                        onToggleSelect={toggleItemSelection}
+                                        onUpdateQuantity={updateQuantity}
+                                        onRemove={removeItem}
+                                        updating={updatingItemId === id}
+                                        removing={removingItemId === id}
+                                    />
+                                )
+                            })}
+                        </section>
+
+                        <aside className="cart-summary">
+                            <h2>Order Summary</h2>
+
+                            <div className="cart-summary-row">
+                                <span>All cart items</span>
+                                <span>{totalQuantity}</span>
+                            </div>
+
+                            <div className="cart-summary-row">
+                                <span>Cart subtotal</span>
+                                <span>₱{formatPrice(totalSubtotal)}</span>
+                            </div>
+
+                            <hr />
+
+                            <div className="cart-summary-row">
+                                <span>Selected quantity</span>
+                                <span>{selectedQuantity}</span>
+                            </div>
+
+                            <div className="cart-summary-total">
+                                <span>Selected subtotal</span>
+                                <strong>₱{formatPrice(selectedSubtotal)}</strong>
+                            </div>
+
+                            {hasUnavailableItems && (
+                                <p className="cart-summary-warning">
+                                    One or more selected items are unavailable
+                                    or have insufficient stock.
+                                </p>
+                            )}
 
                             <button
                                 type="button"
-                                onClick={deleteSelectedItems}
+                                className="cart-checkout-button"
+                                onClick={handleCheckout}
                                 disabled={
-                                    selectedItems.length === 0 ||
+                                    selectedItemIds.length === 0 ||
+                                    hasUnavailableItems ||
+                                    checkingOut ||
                                     deletingSelected ||
-                                    checkingOut
+                                    Boolean(updatingItemId) ||
+                                    Boolean(removingItemId)
                                 }
-                                style={{
-                                    ...styles.deleteButton,
-                                    ...(selectedItems.length === 0
-                                        ? styles.disabled
-                                        : {})
-                                }}
                             >
-                                {deletingSelected
-                                    ? 'Deleting...'
-                                    : `Delete Selected (${selectedItems.length})`}
+                                {checkingOut
+                                    ? 'Processing...'
+                                    : 'Checkout Selected Items'}
                             </button>
-                        </div>
 
-                        <div className="cart-layout">
-                            <section>
-                                {cartItems.map(cartItem => {
-                                    const itemId = cartItem.item?._id
-
-                                    return (
-                                        <CartItem
-                                            key={itemId || cartItem._id}
-                                            cartItem={cartItem}
-                                            selected={Boolean(
-                                                itemId &&
-                                                selectedItemIds.includes(itemId)
-                                            )}
-                                            onToggleSelect={toggleItemSelection}
-                                            onUpdateQuantity={updateQuantity}
-                                            onRemove={removeItem}
-                                            updating={updatingItemId === itemId}
-                                            removing={removingItemId === itemId}
-                                        />
-                                    )
-                                })}
-                            </section>
-
-                            <div className="cart-summary-column">
-                                <CartSummary
-                                    selectedQuantity={selectedQuantity}
-                                    selectedSubtotal={selectedSubtotal}
-                                    selectedCount={selectedItems.length}
-                                    onCheckout={handleCheckout}
-                                    checkingOut={checkingOut}
-                                    disabled={
-                                        selectedItems.length === 0 ||
-                                        hasUnavailableItems ||
-                                        updatingItemId !== null ||
-                                        removingItemId !== null ||
-                                        deletingSelected
-                                    }
-                                />
-
-                                {hasUnavailableItems && (
-                                    <p style={styles.warning}>
-                                        One or more selected products have
-                                        insufficient stock. Adjust the quantity
-                                        or remove the product before checkout.
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </>
+                            <Link to="/shop" className="cart-continue-link">
+                                Continue Shopping
+                            </Link>
+                        </aside>
+                    </div>
                 )}
             </main>
-        </div>
-    )
-}
 
-const styles = {
-    page: {
-        minHeight: '100vh',
-        backgroundColor: '#f8fafc',
-        color: '#0f172a'
-    },
-    container: {
-        maxWidth: '1240px',
-        margin: '0 auto',
-        padding: '28px 24px 64px'
-    },
-    breadcrumb: {
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'center',
-        fontSize: '13px',
-        color: '#64748b',
-        marginBottom: '28px'
-    },
-    link: {
-        color: '#0f766e',
-        textDecoration: 'none'
-    },
-    header: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '16px',
-        marginBottom: '24px'
-    },
-    title: {
-        fontSize: 'clamp(28px, 4vw, 36px)',
-        margin: '0 0 8px'
-    },
-    subtitle: {
-        margin: 0,
-        color: '#64748b',
-        lineHeight: 1.6
-    },
-    count: {
-        fontSize: '13px',
-        color: '#115e59',
-        backgroundColor: '#ccfbf1',
-        padding: '8px 12px',
-        borderRadius: '999px'
-    },
-    message: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        padding: '12px 16px',
-        marginBottom: '20px',
-        borderRadius: '8px',
-        backgroundColor: '#dcfce7',
-        color: '#166534'
-    },
-    error: {
-        backgroundColor: '#fee2e2',
-        color: '#991b1b'
-    },
-    dismiss: {
-        border: 'none',
-        background: 'transparent',
-        color: 'inherit',
-        cursor: 'pointer',
-        fontSize: '20px'
-    },
-    bulkActions: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
-        flexWrap: 'wrap',
-        marginBottom: '20px',
-        padding: '14px 16px',
-        border: '1px solid #e2e8f0',
-        borderRadius: '10px',
-        backgroundColor: '#fff'
-    },
-    selectAll: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        fontWeight: '600',
-        fontSize: '14px',
-        cursor: 'pointer'
-    },
-    checkbox: {
-        width: '17px',
-        height: '17px',
-        accentColor: '#0f766e',
-        cursor: 'pointer'
-    },
-    selectionCount: {
-        color: '#64748b',
-        fontSize: '13px',
-        flex: 1
-    },
-    deleteButton: {
-        border: '1px solid #fecaca',
-        borderRadius: '8px',
-        backgroundColor: '#fff',
-        color: '#dc2626',
-        padding: '10px 14px',
-        fontWeight: '600',
-        cursor: 'pointer'
-    },
-    disabled: {
-        opacity: 0.5,
-        cursor: 'not-allowed'
-    },
-    warning: {
-        padding: '12px',
-        borderRadius: '8px',
-        backgroundColor: '#fef3c7',
-        color: '#92400e',
-        fontSize: '13px',
-        lineHeight: 1.6
-    },
-    loading: {
-        padding: '60px 0',
-        textAlign: 'center',
-        color: '#64748b'
-    }
+            <style>{`
+                .cart-page {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 32px 20px 60px;
+                    color: #1f2937;
+                }
+
+                .cart-page-header {
+                    margin-bottom: 24px;
+                }
+
+                .cart-page-header h1 {
+                    font-size: 30px;
+                    margin: 0 0 8px;
+                }
+
+                .cart-page-header p {
+                    color: #6b7280;
+                    margin: 0;
+                }
+
+                .cart-message {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 16px;
+                    margin-bottom: 20px;
+                    border-radius: 8px;
+                }
+
+                .cart-message.success {
+                    background: #dcfce7;
+                    color: #166534;
+                }
+
+                .cart-message.error {
+                    background: #fee2e2;
+                    color: #991b1b;
+                }
+
+                .cart-message button {
+                    border: 0;
+                    background: transparent;
+                    font-size: 20px;
+                    cursor: pointer;
+                }
+
+                .cart-loading {
+                    padding: 40px 0;
+                    text-align: center;
+                }
+
+                .cart-empty {
+                    padding: 56px 20px;
+                    text-align: center;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                }
+
+                .cart-empty p {
+                    color: #6b7280;
+                }
+
+                .cart-shop-link,
+                .cart-continue-link {
+                    display: inline-block;
+                    text-decoration: none;
+                    color: #166534;
+                    font-weight: 600;
+                    margin-top: 12px;
+                }
+
+                .cart-layout {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 320px;
+                    align-items: start;
+                    gap: 24px;
+                }
+
+                .cart-list-toolbar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                    padding: 14px 16px;
+                    margin-bottom: 16px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 10px;
+                    background: #fff;
+                }
+
+                .cart-select-all {
+                    display: flex;
+                    align-items: center;
+                    gap: 9px;
+                    cursor: pointer;
+                }
+
+                .cart-select-all input {
+                    accent-color: #166534;
+                }
+
+                .cart-delete-selected {
+                    color: #dc2626;
+                    background: transparent;
+                    border: 0;
+                    cursor: pointer;
+                    font-weight: 600;
+                }
+
+                .cart-delete-selected:disabled {
+                    opacity: 0.45;
+                    cursor: not-allowed;
+                }
+
+                .cart-summary {
+                    position: sticky;
+                    top: 20px;
+                    padding: 22px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    background: #fff;
+                }
+
+                .cart-summary h2 {
+                    margin: 0 0 20px;
+                    font-size: 20px;
+                }
+
+                .cart-summary-row,
+                .cart-summary-total {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 12px;
+                    margin-bottom: 14px;
+                }
+
+                .cart-summary-row span:first-child,
+                .cart-summary-total span {
+                    color: #4b5563;
+                }
+
+                .cart-summary-total {
+                    align-items: flex-start;
+                    font-size: 16px;
+                }
+
+                .cart-summary-total strong {
+                    text-align: right;
+                }
+
+                .cart-summary-warning {
+                    color: #b45309;
+                    font-size: 13px;
+                    line-height: 1.5;
+                }
+
+                .cart-checkout-button {
+                    width: 100%;
+                    border: 0;
+                    border-radius: 8px;
+                    padding: 13px 16px;
+                    background: #166534;
+                    color: #fff;
+                    font-weight: 600;
+                    cursor: pointer;
+                    margin-top: 12px;
+                }
+
+                .cart-checkout-button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                .cart-continue-link {
+                    display: block;
+                    text-align: center;
+                }
+
+                @media (max-width: 850px) {
+                    .cart-layout {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .cart-summary {
+                        position: static;
+                    }
+                }
+
+                @media (max-width: 520px) {
+                    .cart-page {
+                        padding: 22px 12px 40px;
+                    }
+
+                    .cart-page-header h1 {
+                        font-size: 25px;
+                    }
+
+                    .cart-list-toolbar {
+                        align-items: flex-start;
+                        flex-direction: column;
+                    }
+                }
+            `}</style>
+        </>
+    )
 }
 
 export default Cart

@@ -1,8 +1,6 @@
-
 import { useCallback, useEffect, useMemo, useState } from 'react'
-
 import {
-    getCart as fetchCart,
+    getCart,
     updateCartItem as updateCartItemRequest,
     removeCartItem as removeCartItemRequest,
     checkoutCart
@@ -19,149 +17,168 @@ function useCart() {
     const [message, setMessage] = useState('')
     const [messageType, setMessageType] = useState('success')
 
-    const showMessage = useCallback((text, type = 'success') => {
+    const showMessage = (text, type = 'success') => {
         setMessage(text)
         setMessageType(type)
-    }, [])
+    }
 
     const loadCart = useCallback(async () => {
+        setLoading(true)
+
         try {
-            setLoading(true)
-            const data = await fetchCart()
-            const nextCart = data.cart
+            const data = await getCart()
+            const nextCart = data.cart || null
+            const nextItems = nextCart?.items || []
 
             setCart(nextCart)
 
-            // Keep selections that still exist in the cart.
-            const existingIds = new Set(
-                (nextCart?.items || [])
-                    .map(entry => entry.item?._id)
-                    .filter(Boolean)
-            )
+            const availableIds = nextItems
+                .map(cartItem => cartItem.item?._id)
+                .filter(Boolean)
+                .map(String)
 
             setSelectedItemIds(previous =>
-                previous.filter(id => existingIds.has(id))
+                previous.filter(id => availableIds.includes(String(id)))
             )
         } catch (error) {
             showMessage(
-                error.response?.data?.message ||
-                'Failed to load your cart.',
+                error.response?.data?.message || 'Unable to load your cart.',
                 'error'
             )
         } finally {
             setLoading(false)
         }
-    }, [showMessage])
+    }, [])
 
     useEffect(() => {
         loadCart()
     }, [loadCart])
 
-    const cartItems = cart?.items || []
+    const cartItems = useMemo(
+        () => cart?.items || [],
+        [cart]
+    )
+
+    const getItemId = cartItem =>
+        cartItem.item?._id ? String(cartItem.item._id) : ''
 
     const selectedItems = useMemo(
-        () => cartItems.filter(entry =>
-            entry.item?._id &&
-            selectedItemIds.includes(entry.item._id)
+        () => cartItems.filter(cartItem =>
+            selectedItemIds.includes(getItemId(cartItem))
         ),
         [cartItems, selectedItemIds]
     )
 
-    const selectedQuantity = useMemo(
-        () => selectedItems.reduce(
-            (total, entry) => total + Number(entry.quantity || 0),
-            0
-        ),
-        [selectedItems]
+    const selectedQuantity = selectedItems.reduce(
+        (total, cartItem) => total + Number(cartItem.quantity || 0),
+        0
     )
 
-    const selectedSubtotal = useMemo(
-        () => selectedItems.reduce((total, entry) => {
-            return total +
-                Number(entry.item?.sell_price || 0) *
-                Number(entry.quantity || 0)
-        }, 0),
-        [selectedItems]
+    const selectedSubtotal = selectedItems.reduce(
+        (total, cartItem) => {
+            const price = Number(cartItem.item?.sell_price || 0)
+            const quantity = Number(cartItem.quantity || 0)
+            return total + price * quantity
+        },
+        0
     )
 
-    const totalQuantity = useMemo(
-        () => cartItems.reduce(
-            (total, entry) => total + Number(entry.quantity || 0),
-            0
-        ),
-        [cartItems]
+    const totalQuantity = cartItems.reduce(
+        (total, cartItem) => total + Number(cartItem.quantity || 0),
+        0
     )
 
-    const subtotal = useMemo(
-        () => cartItems.reduce((total, entry) => {
-            return total +
-                Number(entry.item?.sell_price || 0) *
-                Number(entry.quantity || 0)
-        }, 0),
-        [cartItems]
+    const totalSubtotal = cartItems.reduce(
+        (total, cartItem) => {
+            const price = Number(cartItem.item?.sell_price || 0)
+            const quantity = Number(cartItem.quantity || 0)
+            return total + price * quantity
+        },
+        0
     )
-
-    const hasUnavailableItems = selectedItems.some(entry => {
-        const item = entry.item
-        const stock = Number(item?.stock?.quantity ?? 0)
-
-        return (
-            !item ||
-            item.deleted_at != null ||
-            stock < 1 ||
-            Number(entry.quantity) > stock
-        )
-    })
 
     const allSelected =
         cartItems.length > 0 &&
-        cartItems.every(entry =>
-            entry.item?._id &&
-            selectedItemIds.includes(entry.item._id)
+        cartItems.every(cartItem =>
+            selectedItemIds.includes(getItemId(cartItem))
         )
 
+    const hasUnavailableItems = selectedItems.some(cartItem => {
+        const product = cartItem.item
+        const quantity = Number(cartItem.quantity || 0)
+        const stock = Number(product?.stock?.quantity ?? 0)
+
+        return (
+            !product ||
+            product.deleted_at ||
+            !Number.isInteger(quantity) ||
+            quantity < 1 ||
+            quantity > stock ||
+            !Number.isFinite(Number(product?.sell_price)) ||
+            Number(product?.sell_price) < 0
+        )
+    })
+
     const toggleItemSelection = itemId => {
+        const id = String(itemId)
+
         setSelectedItemIds(previous =>
-            previous.includes(itemId)
-                ? previous.filter(id => id !== itemId)
-                : [...previous, itemId]
+            previous.includes(id)
+                ? previous.filter(existingId => existingId !== id)
+                : [...previous, id]
         )
     }
 
     const toggleSelectAll = () => {
         if (allSelected) {
             setSelectedItemIds([])
-        } else {
-            setSelectedItemIds(
-                cartItems
-                    .map(entry => entry.item?._id)
-                    .filter(Boolean)
-            )
+            return
         }
+
+        setSelectedItemIds(
+            cartItems.map(getItemId).filter(Boolean)
+        )
     }
 
     const updateQuantity = async (itemId, quantity) => {
-        const nextQuantity = Number(quantity)
+        const id = String(itemId)
+        const cartItem = cartItems.find(
+            item => getItemId(item) === id
+        )
+        const stock = Number(cartItem?.item?.stock?.quantity ?? 0)
 
-        if (!Number.isInteger(nextQuantity) || nextQuantity < 1) {
-            showMessage('Quantity must be at least 1.', 'error')
+        if (
+            !Number.isInteger(Number(quantity)) ||
+            Number(quantity) < 1
+        ) {
+            showMessage('Quantity must be a positive whole number.', 'error')
             return false
         }
 
+        if (Number(quantity) > stock) {
+            showMessage(`Only ${stock} units are available.`, 'error')
+            return false
+        }
+
+        setUpdatingItemId(id)
+
         try {
-            setUpdatingItemId(itemId)
+            const data = await updateCartItemRequest(id, Number(quantity))
 
-            const data = await updateCartItemRequest(itemId, nextQuantity)
-            setCart(data.cart)
+            if (data.cart) {
+                setCart(data.cart)
+            } else {
+                await loadCart()
+            }
 
-            showMessage(data.message || 'Cart updated successfully.')
+            showMessage(data.message || 'Cart quantity updated.')
             return true
         } catch (error) {
             showMessage(
-                error.response?.data?.message ||
-                'Failed to update quantity.',
+                error.response?.data?.message || 'Unable to update quantity.',
                 'error'
             )
+
             await loadCart()
             return false
         } finally {
@@ -172,22 +189,27 @@ function useCart() {
     const removeItem = async itemId => {
         if (!itemId) return false
 
-        try {
-            setRemovingItemId(itemId)
+        const id = String(itemId)
+        setRemovingItemId(id)
 
-            const data = await removeCartItemRequest(itemId)
-            setCart(data.cart)
+        try {
+            const data = await removeCartItemRequest(id)
+
+            if (data.cart) {
+                setCart(data.cart)
+            } else {
+                await loadCart()
+            }
 
             setSelectedItemIds(previous =>
-                previous.filter(id => id !== itemId)
+                previous.filter(selectedId => selectedId !== id)
             )
 
-            showMessage(data.message || 'Item removed from your cart.')
+            showMessage(data.message || 'Item removed from cart.')
             return true
         } catch (error) {
             showMessage(
-                error.response?.data?.message ||
-                'Failed to remove item.',
+                error.response?.data?.message || 'Unable to remove item.',
                 'error'
             )
             return false
@@ -197,69 +219,72 @@ function useCart() {
     }
 
     const deleteSelectedItems = async () => {
-        if (selectedItems.length === 0 || deletingSelected) return
+        if (selectedItemIds.length === 0) {
+            showMessage('Select at least one item to delete.', 'error')
+            return false
+        }
 
         const confirmed = window.confirm(
-            `Remove ${selectedItems.length} selected product(s) from your cart?`
+            `Remove ${selectedItemIds.length} selected item(s) from your cart?`
         )
 
-        if (!confirmed) return
+        if (!confirmed) return false
+
+        setDeletingSelected(true)
 
         try {
-            setDeletingSelected(true)
-
-            // Delete one at a time so each request finishes before the next.
-            for (const entry of selectedItems) {
-                await removeCartItemRequest(entry.item._id)
+            for (const itemId of selectedItemIds) {
+                await removeCartItemRequest(itemId)
             }
 
             setSelectedItemIds([])
             await loadCart()
-            showMessage('Selected products were removed from your cart.')
+            showMessage('Selected items were removed.')
+            return true
         } catch (error) {
-            await loadCart()
             showMessage(
                 error.response?.data?.message ||
-                'Some items could not be removed. Please check your cart.',
+                    'Some items could not be removed. Refreshing your cart.',
                 'error'
             )
+            await loadCart()
+            return false
         } finally {
             setDeletingSelected(false)
         }
     }
 
     const checkoutSelected = async () => {
-        if (
-            selectedItems.length === 0 ||
-            hasUnavailableItems ||
-            checkingOut
-        ) {
-            return null
+        if (selectedItemIds.length === 0) {
+            showMessage('Select items before checking out.', 'error')
+            return false
         }
 
-        const itemIds = selectedItems.map(entry => entry.item._id)
+        if (hasUnavailableItems) {
+            showMessage(
+                'Some selected items are unavailable or exceed stock.',
+                'error'
+            )
+            return false
+        }
+
+        setCheckingOut(true)
 
         try {
-            setCheckingOut(true)
-
-            // The backend must support item_ids for selected checkout.
-            const data = await checkoutCart(itemIds)
+            const data = await checkoutCart(selectedItemIds)
 
             setSelectedItemIds([])
             await loadCart()
 
-            showMessage(
-                data.message || 'Your selected items were ordered successfully.'
-            )
-
-            return data
+            showMessage(data.message || 'Checkout completed successfully.')
+            return true
         } catch (error) {
             showMessage(
-                error.response?.data?.message ||
-                'Checkout failed.',
+                error.response?.data?.message || 'Checkout failed.',
                 'error'
             )
-            return null
+            await loadCart()
+            return false
         } finally {
             setCheckingOut(false)
         }
@@ -268,29 +293,30 @@ function useCart() {
     return {
         cart,
         cartItems,
-        selectedItems,
         selectedItemIds,
         loading,
-        message,
-        messageType,
-        setMessage,
-        totalQuantity,
-        subtotal,
-        selectedQuantity,
-        selectedSubtotal,
-        allSelected,
-        hasUnavailableItems,
         updatingItemId,
         removingItemId,
         deletingSelected,
         checkingOut,
+        message,
+        messageType,
+        setMessage,
+        totalQuantity,
+        totalSubtotal,
+        selectedQuantity,
+        selectedSubtotal,
+        selectedItems,
+        allSelected,
+        hasUnavailableItems,
         toggleItemSelection,
         toggleSelectAll,
         updateQuantity,
         removeItem,
         deleteSelectedItems,
         checkoutSelected,
-        loadCart
+        loadCart,
+        showMessage
     }
 }
 

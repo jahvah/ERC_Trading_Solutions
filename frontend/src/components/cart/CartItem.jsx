@@ -1,9 +1,4 @@
-
-const formatPrice = amount =>
-    new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP'
-    }).format(Number(amount) || 0)
+import { useEffect, useState } from 'react'
 
 function CartItem({
     cartItem,
@@ -14,271 +9,410 @@ function CartItem({
     updating,
     removing
 }) {
-    const item = cartItem.item
+    const product = cartItem?.item
+    const itemId = product?._id
 
-    if (!item) {
+    const cartQuantity = Number(cartItem?.quantity || 1)
+    const stockQuantity = Number(product?.stock?.quantity ?? 0)
+    const price = Number(product?.sell_price || 0)
+    const subtotal = price * cartQuantity
+
+    const [quantityInput, setQuantityInput] = useState(String(cartQuantity))
+    const [quantityError, setQuantityError] = useState('')
+
+    useEffect(() => {
+        setQuantityInput(String(cartQuantity))
+    }, [cartQuantity])
+
+    const imagePath =
+        product?.images?.find(image => image.image_path)?.image_path ||
+        product?.image ||
+        ''
+
+    const formatPrice = amount =>
+        amount.toLocaleString('en-PH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+
+    const handleInputChange = value => {
+        if (value === '' || /^\d+$/.test(value)) {
+            setQuantityInput(value)
+            setQuantityError('')
+        }
+    }
+
+    const saveQuantity = async () => {
+        if (updating) return
+
+        if (quantityInput.trim() === '') {
+            setQuantityError('Enter a quantity.')
+            setQuantityInput(String(cartQuantity))
+            return
+        }
+
+        const quantity = Number(quantityInput)
+
+        if (!Number.isInteger(quantity) || quantity < 1) {
+            setQuantityError('Quantity must be at least 1.')
+            setQuantityInput(String(cartQuantity))
+            return
+        }
+
+        if (quantity > stockQuantity) {
+            setQuantityError(`Only ${stockQuantity} available.`)
+            setQuantityInput(String(cartQuantity))
+            return
+        }
+
+        if (quantity === cartQuantity) return
+
+        const success = await onUpdateQuantity(itemId, quantity)
+
+        if (success === false) {
+            setQuantityInput(String(cartQuantity))
+        }
+    }
+
+    const decreaseQuantity = async () => {
+        if (updating || cartQuantity <= 1) return
+
+        setQuantityError('')
+        await onUpdateQuantity(itemId, cartQuantity - 1)
+    }
+
+    const increaseQuantity = async () => {
+        if (updating) return
+
+        if (cartQuantity >= stockQuantity) {
+            setQuantityError('Maximum available stock reached.')
+            return
+        }
+
+        setQuantityError('')
+        await onUpdateQuantity(itemId, cartQuantity + 1)
+    }
+
+    if (!product) {
         return (
-            <article style={styles.card} className="cart-item-card">
-                <span>Product unavailable</span>
+            <div className="cart-item-card">
+                <p>This product is no longer available.</p>
+
                 <button
                     type="button"
-                    onClick={() => onRemove(cartItem.item?._id)}
+                    onClick={() => onRemove(cartItem?._id)}
                     disabled={removing}
                 >
-                    Remove
+                    {removing ? 'Removing...' : 'Remove'}
                 </button>
-            </article>
+            </div>
         )
     }
 
-    const stock = Number(item.stock?.quantity ?? 0)
-    const quantity = Number(cartItem.quantity)
-    const price = Number(item.sell_price) || 0
-
-    const image = (item.images || []).find(
-        entry => !entry.deleted_at && entry.image_path
-    )?.image_path
-
-    const unavailable =
-        item.deleted_at != null ||
-        stock < 1 ||
-        quantity > stock
-
     return (
-        <article
-            className="cart-item-card"
-            style={{
-                ...styles.card,
-                ...(selected ? styles.selectedCard : {})
-            }}
-        >
-            <label style={styles.checkboxLabel}>
+        <article className="cart-item-card">
+            <div className="cart-item-top-row">
                 <input
                     type="checkbox"
                     checked={selected}
-                    onChange={() => onToggleSelect(item._id)}
-                    style={styles.checkbox}
-                    aria-label={`Select ${item.item_name}`}
+                    onChange={() => onToggleSelect(itemId)}
+                    aria-label={`Select ${product.item_name}`}
+                    className="cart-item-checkbox"
                 />
-            </label>
 
-            <div
-                className="cart-item-image"
-                style={styles.imageContainer}
-            >
-                {image ? (
+                {imagePath ? (
                     <img
-                        src={image}
-                        alt={item.item_name}
-                        style={styles.image}
+                        src={imagePath}
+                        alt={product.item_name}
+                        className="cart-item-image"
                     />
                 ) : (
-                    <div style={styles.placeholder}>No image</div>
-                )}
-            </div>
-
-            <div style={styles.details}>
-                <div className="cart-item-top-row" style={styles.topRow}>
-                    <div>
-                        <p style={styles.category}>
-                            {item.category || 'Product'}
-                        </p>
-
-                        <h3
-                            className="cart-item-name"
-                            style={styles.name}
-                        >
-                            {item.item_name}
-                        </h3>
+                    <div className="cart-item-image cart-no-image">
+                        No image
                     </div>
+                )}
 
-                    <button
-                        type="button"
-                        style={styles.removeButton}
-                        disabled={removing}
-                        onClick={() => onRemove(item._id)}
-                    >
-                        {removing ? 'Removing...' : 'Remove'}
-                    </button>
+                <div className="cart-item-details">
+                    <h3 className="cart-item-name">
+                        {product.item_name}
+                    </h3>
+
+                    <p className="cart-item-price">
+                        ₱{formatPrice(price)}
+                    </p>
+
+                    <p className="cart-stock">
+                        Available stock: {stockQuantity}
+                    </p>
                 </div>
 
-                <p style={styles.price}>
-                    {formatPrice(price)} <span style={styles.muted}>/ unit</span>
-                </p>
+                <button
+                    type="button"
+                    onClick={() => onRemove(itemId)}
+                    disabled={removing || updating}
+                    className="cart-remove-button"
+                >
+                    {removing ? 'Removing...' : 'Remove'}
+                </button>
+            </div>
 
-                <p style={styles.stock}>
-                    {unavailable
-                        ? `Insufficient stock (${stock} available)`
-                        : `${stock} available`}
-                </p>
+            <div className="cart-item-bottom-row">
+                <div className="cart-quantity-section">
+                    <label className="cart-quantity-label">
+                        Quantity
+                    </label>
 
-                <div style={styles.bottomRow}>
-                    <div style={styles.quantityControl}>
+                    <div className="cart-quantity-controls">
                         <button
                             type="button"
-                            disabled={updating || quantity <= 1}
-                            onClick={() =>
-                                onUpdateQuantity(item._id, quantity - 1)
-                            }
-                            style={styles.quantityButton}
+                            onClick={decreaseQuantity}
+                            disabled={updating || cartQuantity <= 1}
                             aria-label="Decrease quantity"
                         >
                             −
                         </button>
 
-                        <span style={styles.quantity}>{quantity}</span>
+                        <input
+                            type="number"
+                            min="1"
+                            max={stockQuantity}
+                            step="1"
+                            value={quantityInput}
+                            disabled={updating}
+                            onChange={event =>
+                                handleInputChange(event.target.value)
+                            }
+                            onBlur={saveQuantity}
+                            onKeyDown={event => {
+                                if (event.key === 'Enter') {
+                                    event.currentTarget.blur()
+                                }
+                            }}
+                            aria-label={`Quantity for ${product.item_name}`}
+                        />
 
                         <button
                             type="button"
+                            onClick={increaseQuantity}
                             disabled={
-                                updating || unavailable || quantity >= stock
+                                updating ||
+                                cartQuantity >= stockQuantity
                             }
-                            onClick={() =>
-                                onUpdateQuantity(item._id, quantity + 1)
-                            }
-                            style={styles.quantityButton}
                             aria-label="Increase quantity"
                         >
                             +
                         </button>
                     </div>
 
-                    <strong style={styles.subtotal}>
-                        {formatPrice(price * quantity)}
-                    </strong>
+                    {updating && (
+                        <span className="cart-updating-text">
+                            Updating...
+                        </span>
+                    )}
+
+                    {quantityError && (
+                        <p className="cart-quantity-error" role="alert">
+                            {quantityError}
+                        </p>
+                    )}
                 </div>
 
-                {updating && (
-                    <p style={styles.status}>Updating quantity...</p>
-                )}
+                <p className="cart-item-subtotal">
+                    Subtotal: ₱{formatPrice(subtotal)}
+                </p>
             </div>
+
+            <style>{`
+                .cart-item-card {
+                    background: #fff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    padding: 18px;
+                    margin-bottom: 16px;
+                }
+
+                .cart-item-top-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                }
+
+                .cart-item-checkbox {
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                    accent-color: #166534;
+                    flex-shrink: 0;
+                }
+
+                .cart-item-image {
+                    width: 88px;
+                    height: 88px;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    flex-shrink: 0;
+                    background: #f3f4f6;
+                }
+
+                .cart-no-image {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #6b7280;
+                    font-size: 12px;
+                }
+
+                .cart-item-details {
+                    flex: 1;
+                    min-width: 0;
+                }
+
+                .cart-item-name {
+                    font-size: 16px;
+                    font-weight: 600;
+                    margin: 0 0 8px;
+                    overflow-wrap: anywhere;
+                }
+
+                .cart-item-price {
+                    color: #166534;
+                    font-weight: 600;
+                    margin: 0 0 5px;
+                }
+
+                .cart-stock {
+                    color: #6b7280;
+                    font-size: 13px;
+                    margin: 0;
+                }
+
+                .cart-remove-button {
+                    border: 0;
+                    background: transparent;
+                    color: #dc2626;
+                    cursor: pointer;
+                    padding: 8px;
+                    font-weight: 500;
+                    flex-shrink: 0;
+                }
+
+                .cart-remove-button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                .cart-item-bottom-row {
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: space-between;
+                    gap: 16px;
+                    margin-top: 18px;
+                    padding-top: 14px;
+                    border-top: 1px solid #f0f0f0;
+                }
+
+                .cart-quantity-label {
+                    display: block;
+                    font-size: 13px;
+                    color: #4b5563;
+                    margin-bottom: 7px;
+                }
+
+                .cart-quantity-controls {
+                    display: flex;
+                    align-items: center;
+                    gap: 0;
+                }
+
+                .cart-quantity-controls button {
+                    width: 36px;
+                    height: 36px;
+                    border: 1px solid #d1d5db;
+                    background: #f9fafb;
+                    cursor: pointer;
+                    font-size: 20px;
+                }
+
+                .cart-quantity-controls button:first-child {
+                    border-radius: 7px 0 0 7px;
+                }
+
+                .cart-quantity-controls button:last-child {
+                    border-radius: 0 7px 7px 0;
+                }
+
+                .cart-quantity-controls button:disabled {
+                    opacity: 0.45;
+                    cursor: not-allowed;
+                }
+
+                .cart-quantity-controls input {
+                    width: 60px;
+                    height: 36px;
+                    border: 1px solid #d1d5db;
+                    border-left: 0;
+                    border-right: 0;
+                    border-radius: 0;
+                    text-align: center;
+                    font-size: 15px;
+                    outline-offset: -2px;
+                }
+
+                .cart-item-subtotal {
+                    margin: 0;
+                    font-size: 15px;
+                    font-weight: 600;
+                    text-align: right;
+                }
+
+                .cart-updating-text {
+                    display: block;
+                    color: #6b7280;
+                    font-size: 12px;
+                    margin-top: 5px;
+                }
+
+                .cart-quantity-error {
+                    color: #dc2626;
+                    font-size: 12px;
+                    margin: 6px 0 0;
+                }
+
+                @media (max-width: 560px) {
+                    .cart-item-card {
+                        padding: 12px;
+                    }
+
+                    .cart-item-top-row {
+                        gap: 9px;
+                        flex-wrap: wrap;
+                    }
+
+                    .cart-item-image {
+                        width: 68px;
+                        height: 68px;
+                    }
+
+                    .cart-item-name {
+                        font-size: 14px;
+                    }
+
+                    .cart-remove-button {
+                        margin-left: auto;
+                    }
+
+                    .cart-item-bottom-row {
+                        align-items: flex-start;
+                        flex-direction: column;
+                    }
+
+                    .cart-item-subtotal {
+                        text-align: left;
+                    }
+                }
+            `}</style>
         </article>
     )
-}
-
-const styles = {
-    card: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
-        padding: '20px',
-        backgroundColor: '#fff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '14px',
-        marginBottom: '16px',
-        minWidth: 0
-    },
-    selectedCard: {
-        borderColor: '#0f766e',
-        backgroundColor: '#f0fdfa'
-    },
-    checkboxLabel: {
-        display: 'flex',
-        alignItems: 'center',
-        flexShrink: 0
-    },
-    checkbox: {
-        width: '18px',
-        height: '18px',
-        accentColor: '#0f766e',
-        cursor: 'pointer'
-    },
-    imageContainer: {
-        width: '110px',
-        height: '110px',
-        flexShrink: 0,
-        overflow: 'hidden',
-        borderRadius: '10px',
-        backgroundColor: '#f1f5f9'
-    },
-    image: {
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover'
-    },
-    placeholder: {
-        width: '100%',
-        height: '100%',
-        display: 'grid',
-        placeItems: 'center',
-        color: '#94a3b8',
-        fontSize: '12px'
-    },
-    details: {
-        flex: 1,
-        minWidth: 0
-    },
-    topRow: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: '12px'
-    },
-    category: {
-        margin: '0 0 5px',
-        color: '#64748b',
-        fontSize: '12px',
-        textTransform: 'uppercase'
-    },
-    name: {
-        margin: '0 0 8px',
-        fontSize: '17px',
-        overflowWrap: 'anywhere'
-    },
-    removeButton: {
-        border: 'none',
-        background: 'transparent',
-        color: '#dc2626',
-        cursor: 'pointer',
-        fontSize: '13px'
-    },
-    price: {
-        margin: '0 0 5px',
-        fontWeight: '700'
-    },
-    muted: {
-        color: '#64748b',
-        fontWeight: '400',
-        fontSize: '12px'
-    },
-    stock: {
-        margin: '0 0 14px',
-        color: '#64748b',
-        fontSize: '13px'
-    },
-    bottomRow: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '12px',
-        flexWrap: 'wrap'
-    },
-    quantityControl: {
-        display: 'flex',
-        alignItems: 'center',
-        border: '1px solid #cbd5e1',
-        borderRadius: '8px',
-        overflow: 'hidden'
-    },
-    quantityButton: {
-        width: '34px',
-        height: '32px',
-        border: 'none',
-        backgroundColor: '#f8fafc',
-        cursor: 'pointer',
-        fontSize: '18px'
-    },
-    quantity: {
-        minWidth: '36px',
-        textAlign: 'center'
-    },
-    subtotal: {
-        fontSize: '16px'
-    },
-    status: {
-        fontSize: '12px',
-        color: '#64748b'
-    }
 }
 
 export default CartItem

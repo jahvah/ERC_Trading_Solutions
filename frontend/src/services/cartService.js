@@ -9,11 +9,10 @@ export const updateCartItem = async (itemId, quantity) => {
     const response = await api.put(`/cart/${itemId}`, {
         quantity: Number(quantity)
     })
-
     return response.data
 }
 
-export const removeCartItem = async itemId => {
+export const removeCartItem = async (itemId) => {
     const response = await api.delete(`/cart/${itemId}`)
     return response.data
 }
@@ -24,6 +23,5 @@ export const checkoutCart = async (itemIds) => {
         : { item_ids: itemIds }
 
     const response = await api.post('/orders', payload)
-
     return response.data
 }
