@@ -1,112 +1,301 @@
+
+const mongoose = require('mongoose')
 const Order = require('../models/orderModel')
 const Cart = require('../models/cartModel')
+const Item = require('../models/itemModel')
 
-// Create order from cart
+// Create an order from selected cart items or the entire cart
 const createOrder = async (req, res) => {
+    const session = await mongoose.startSession()
+
     try {
         const userId = req.user.id
+        const { item_ids } = req.body
 
-        const cart = await Cart.findOne({
-            user: userId
-        }).populate('items.item')
+        // Validate selected item IDs when provided
+        if (item_ids !== undefined) {
+            if (
+                !Array.isArray(item_ids) ||
+                item_ids.length === 0 ||
+                item_ids.some(
+                    id =>
+                        typeof id !== 'string' ||
+                        !mongoose.isValidObjectId(id)
+                )
+            ) {
+                return res.status(400).json({
+                    message: 'Please select valid cart items to check out'
+                })
+            }
 
-        if (!cart || cart.items.length === 0) {
+            const normalizedIds = item_ids.map(id => id.toString())
+
+            if (new Set(normalizedIds).size !== normalizedIds.length) {
+                return res.status(400).json({
+                    message: 'Duplicate item IDs are not allowed'
+                })
+            }
+        }
+
+        let createdOrder
+
+        await session.withTransaction(async () => {
+            // Find the customer's cart
+            const cart = await Cart.findOne({
+                user: userId
+            }).session(session)
+
+            if (!cart || !cart.items || cart.items.length === 0) {
+                throw new Error('CART_EMPTY')
+            }
+
+            // Choose only the selected items, or everything if item_ids
+            // was not provided
+            let selectedCartItems
+
+            if (item_ids !== undefined) {
+                const selectedIds = new Set(
+                    item_ids.map(id => id.toString())
+                )
+
+                selectedCartItems = cart.items.filter(cartItem => {
+                    const id = cartItem.item?.toString()
+                    return selectedIds.has(id)
+                })
+
+                // Ensure every selected item actually belongs to this cart
+                if (selectedCartItems.length !== item_ids.length) {
+                    throw new Error('ITEM_NOT_IN_CART')
+                }
+            } else {
+                selectedCartItems = [...cart.items]
+            }
+
+            if (selectedCartItems.length === 0) {
+                throw new Error('NO_ITEMS_SELECTED')
+            }
+
+            const orderLines = []
+
+            // Validate products and deduct stock atomically
+            for (const cartItem of selectedCartItems) {
+                const itemId = cartItem.item
+
+                if (!itemId) {
+                    throw new Error('ITEM_NOT_FOUND')
+                }
+
+                const quantity = Number(cartItem.quantity)
+
+                if (
+                    !Number.isInteger(quantity) ||
+                    quantity < 1
+                ) {
+                    throw new Error('INVALID_QUANTITY')
+                }
+
+                // Atomically decrement stock only if enough remains.
+                // This also protects against concurrent checkouts.
+                const item = await Item.findOneAndUpdate(
+                    {
+                        _id: itemId,
+                        deleted_at: null,
+                        'stock.quantity': { $gte: quantity }
+                    },
+                    {
+                        $inc: {
+                            'stock.quantity': -quantity
+                        }
+                    },
+                    {
+                        new: true,
+                        session
+                    }
+                )
+
+                if (!item) {
+                    const existingItem = await Item.findById(itemId)
+                        .session(session)
+
+                    if (!existingItem || existingItem.deleted_at) {
+                        throw new Error('ITEM_NOT_FOUND')
+                    }
+
+                    throw new Error(
+                        `INSUFFICIENT_STOCK:${existingItem.item_name}`
+                    )
+                }
+
+                const price = Number(item.sell_price)
+
+                if (!Number.isFinite(price) || price < 0) {
+                    throw new Error('INVALID_PRICE')
+                }
+
+                orderLines.push({
+                    item: item._id,
+                    quantity,
+                    price
+                })
+            }
+
+            // Create the order inside the same transaction
+            const orders = await Order.create(
+                [
+                    {
+                        customer: userId,
+                        order_lines: orderLines,
+                        status: 'Pending'
+                    }
+                ],
+                { session }
+            )
+
+            createdOrder = orders[0]
+
+            // Remove only checked-out products from the cart
+            const purchasedIds = new Set(
+                selectedCartItems.map(cartItem =>
+                    cartItem.item.toString()
+                )
+            )
+
+            cart.items = cart.items.filter(
+                cartItem =>
+                    !purchasedIds.has(cartItem.item.toString())
+            )
+
+            cart.updated_at = new Date()
+
+            await cart.save({ session })
+        })
+
+        // Populate the response after the transaction completes
+        const populatedOrder = await Order.findById(createdOrder._id)
+            .populate('customer')
+            .populate('order_lines.item')
+
+        return res.status(201).json({
+            message: 'Order created successfully',
+            order: populatedOrder
+        })
+    } catch (error) {
+        const message = error.message || ''
+
+        if (message === 'CART_EMPTY') {
             return res.status(400).json({
                 message: 'Cart is empty'
             })
         }
 
-        const orderLines = cart.items.map((cartItem) => ({
-            item: cartItem.item._id,
-            quantity: cartItem.quantity,
-            price: cartItem.item.sell_price
-        }))
+        if (message === 'ITEM_NOT_IN_CART') {
+            return res.status(400).json({
+                message: 'One or more selected items are not in your cart'
+            })
+        }
 
-        const order = await Order.create({
-            customer: userId,
-            order_lines: orderLines,
-            status: 'Pending'
-        })
+        if (message === 'NO_ITEMS_SELECTED') {
+            return res.status(400).json({
+                message: 'Please select at least one item to check out'
+            })
+        }
 
-        cart.items = []
-        cart.updated_at = Date.now()
+        if (message === 'ITEM_NOT_FOUND') {
+            return res.status(404).json({
+                message: 'A selected product no longer exists or is unavailable'
+            })
+        }
 
-        await cart.save()
+        if (message === 'INVALID_QUANTITY') {
+            return res.status(400).json({
+                message: 'A cart item has an invalid quantity'
+            })
+        }
 
-        const createdOrder = await Order.findById(order._id)
-            .populate('customer')
-            .populate('order_lines.item')
+        if (message === 'INVALID_PRICE') {
+            return res.status(400).json({
+                message: 'A selected product has an invalid selling price'
+            })
+        }
 
-        res.status(201).json({
-            message: 'Order created successfully',
-            order: createdOrder
-        })
+        if (message.startsWith('INSUFFICIENT_STOCK:')) {
+            const itemName = message.split(':').slice(1).join(':')
 
-    } catch (error) {
-        res.status(500).json({
+            return res.status(400).json({
+                message: `Not enough stock available for ${itemName}`
+            })
+        }
+
+        console.error('Create order error:', error)
+
+        return res.status(500).json({
             message: 'Error creating order',
             error: error.message
         })
+    } finally {
+        await session.endSession()
     }
 }
 
-// Get user's orders
+// Get orders belonging to the logged-in customer
 const getOrders = async (req, res) => {
     try {
-        const userId = req.user.id
-
         const orders = await Order.find({
-            customer: userId,
+            customer: req.user.id,
             deleted_at: null
         })
+            .populate('customer')
             .populate('order_lines.item')
             .sort({ date_placed: -1 })
 
-        res.status(200).json({
+        return res.status(200).json({
             message: 'Orders retrieved successfully',
             orders
         })
-
     } catch (error) {
-        res.status(500).json({
-            message: 'Error getting orders',
+        return res.status(500).json({
+            message: 'Error retrieving orders',
             error: error.message
         })
     }
 }
 
-// Get single order
+// Get one order belonging to the logged-in customer
 const getOrder = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id)
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({
+                message: 'Invalid order ID'
+            })
+        }
+
+        const order = await Order.findOne({
+            _id: req.params.id,
+            customer: req.user.id,
+            deleted_at: null
+        })
+            .populate('customer')
             .populate('order_lines.item')
 
-        if (!order || order.deleted_at !== null) {
+        if (!order) {
             return res.status(404).json({
                 message: 'Order not found'
             })
         }
 
-        if (order.customer.toString() !== req.user.id) {
-            return res.status(403).json({
-                message: 'Not authorized to view this order'
-            })
-        }
-
-        res.status(200).json({
+        return res.status(200).json({
             message: 'Order retrieved successfully',
             order
         })
-
     } catch (error) {
-        res.status(500).json({
-            message: 'Error getting order',
+        return res.status(500).json({
+            message: 'Error retrieving order',
             error: error.message
         })
-    }   
+    }
 }
 
-// Get all orders for admin
+// Get all orders (protect this route with admin authorization)
 const getAllOrders = async (req, res) => {
     try {
         const orders = await Order.find({
@@ -116,66 +305,77 @@ const getAllOrders = async (req, res) => {
             .populate('order_lines.item')
             .sort({ date_placed: -1 })
 
-        res.status(200).json({
+        return res.status(200).json({
             message: 'All orders retrieved successfully',
             orders
         })
-
     } catch (error) {
-        res.status(500).json({
-            message: 'Error getting all orders',
+        return res.status(500).json({
+            message: 'Error retrieving all orders',
             error: error.message
         })
     }
 }
 
-// Update order status
+// Update an order's status (protect this route with admin authorization)
 const updateOrderStatus = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id)
+        const { status } = req.body
 
-        if (!order || order.deleted_at !== null) {
-            return res.status(404).json({
-                message: 'Order not found'
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({
+                message: 'Invalid order ID'
             })
         }
 
-        const { status } = req.body
-
-        const validStatuses = [
+        const allowedStatuses = [
             'Pending',
             'Shipped',
             'Delivered',
             'Cancelled'
         ]
 
-        if (!validStatuses.includes(status)) {
+        if (!allowedStatuses.includes(status)) {
             return res.status(400).json({
-                message: 'Invalid order status'
+                message: 'Please select a valid order status'
+            })
+        }
+
+        const order = await Order.findOne({
+            _id: req.params.id,
+            deleted_at: null
+        })
+
+        if (!order) {
+            return res.status(404).json({
+                message: 'Order not found'
             })
         }
 
         order.status = status
 
-        if (status === 'Shipped') {
-            order.date_shipped = Date.now()
+        if (status === 'Shipped' && !order.date_shipped) {
+            order.date_shipped = new Date()
         }
 
-        if (status === 'Delivered') {
-            order.date_delivered = Date.now()
+        if (status === 'Delivered' && !order.date_delivered) {
+            order.date_delivered = new Date()
         }
 
-        order.updated_at = Date.now()
+        order.updated_at = new Date()
 
         await order.save()
 
-        res.status(200).json({
-            message: 'Order status updated successfully',
-            order
-        })
+        const updatedOrder = await Order.findById(order._id)
+            .populate('customer')
+            .populate('order_lines.item')
 
+        return res.status(200).json({
+            message: 'Order status updated successfully',
+            order: updatedOrder
+        })
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Error updating order status',
             error: error.message
         })
