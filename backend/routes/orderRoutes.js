@@ -1,3 +1,4 @@
+
 const express = require('express')
 
 const {
@@ -5,7 +6,8 @@ const {
     getOrders,
     getOrder,
     getAllOrders,
-    updateOrderStatus
+    updateOrderStatus,
+    cancelOrder
 } = require('../controllers/orderController')
 
 const { protect } = require('../middleware/authMiddleware')
@@ -19,6 +21,7 @@ router.put('/admin/:id', protect, updateOrderStatus)
 // Customer routes
 router.post('/', protect, createOrder)
 router.get('/', protect, getOrders)
+router.patch('/:id/cancel', protect, cancelOrder)
 router.get('/:id', protect, getOrder)
 
 module.exports = router

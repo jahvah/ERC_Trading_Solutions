@@ -382,10 +382,125 @@ const updateOrderStatus = async (req, res) => {
     }
 }
 
+
+const cancelOrder = async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({
+            message: 'Invalid order ID'
+        })
+    }
+
+    const session = await mongoose.startSession()
+
+    try {
+        let cancelledOrder
+
+        await session.withTransaction(async () => {
+            // Only the owner can cancel their own pending order.
+            // The status condition prevents duplicate cancellation.
+            const order = await Order.findOneAndUpdate(
+                {
+                    _id: req.params.id,
+                    customer: req.user.id,
+                    status: 'Pending',
+                    deleted_at: null
+                },
+                {
+                    $set: {
+                        status: 'Cancelled',
+                        updated_at: new Date()
+                    }
+                },
+                {
+                    new: true,
+                    session
+                }
+            )
+
+            if (!order) {
+                const existingOrder = await Order.findOne({
+                    _id: req.params.id,
+                    customer: req.user.id,
+                    deleted_at: null
+                }).session(session)
+
+                if (!existingOrder) {
+                    throw new Error('ORDER_NOT_FOUND')
+                }
+
+                throw new Error('ORDER_NOT_PENDING')
+            }
+
+            // Restore stock reserved when this order was created.
+            for (const line of order.order_lines) {
+                if (!line.item || line.quantity < 1) {
+                    throw new Error('INVALID_ORDER_LINE')
+                }
+
+                const result = await Item.updateOne(
+                    { _id: line.item },
+                    {
+                        $inc: {
+                            'stock.quantity': line.quantity
+                        }
+                    },
+                    { session }
+                )
+
+                if (result.matchedCount !== 1) {
+                    throw new Error('ORDER_ITEM_NOT_FOUND')
+                }
+            }
+
+            cancelledOrder = order
+        })
+
+        const populatedOrder = await Order.findById(cancelledOrder._id)
+            .populate('customer')
+            .populate('order_lines.item')
+
+        return res.status(200).json({
+            message: 'Order cancelled successfully',
+            order: populatedOrder
+        })
+    } catch (error) {
+        if (error.message === 'ORDER_NOT_FOUND') {
+            return res.status(404).json({
+                message: 'Order not found'
+            })
+        }
+
+        if (error.message === 'ORDER_NOT_PENDING') {
+            return res.status(400).json({
+                message: 'Only pending orders can be cancelled'
+            })
+        }
+
+        if (
+            error.message === 'INVALID_ORDER_LINE' ||
+            error.message === 'ORDER_ITEM_NOT_FOUND'
+        ) {
+            return res.status(400).json({
+                message: 'Unable to restore stock for this order'
+            })
+        }
+
+        console.error('Cancel order error:', error)
+
+        return res.status(500).json({
+            message: 'Error cancelling order'
+        })
+    } finally {
+        await session.endSession()
+    }
+}
+
+
 module.exports = {
     createOrder,
     getOrders,
     getOrder,
     getAllOrders,
-    updateOrderStatus
+    updateOrderStatus,
+    cancelOrder
 }
