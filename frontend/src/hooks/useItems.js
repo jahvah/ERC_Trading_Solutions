@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -39,13 +38,12 @@ function useItems() {
 
   const [viewDeleted, setViewDeleted] = useState(false);
 
-const [searchTerm, setSearchTerm] = useState("");
-const [minPrice, setMinPrice] = useState("");
-const [maxPrice, setMaxPrice] = useState("");
-const [selectedCategory, setSelectedCategory] = useState("all");
-const [minRating, setMinRating] = useState("0");
-const [reviewFilter, setReviewFilter] = useState("all");
-
+  const [searchTerm, setSearchTerm] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [minRating, setMinRating] = useState("0");
+  const [reviewFilter, setReviewFilter] = useState("all");
 
   // Fetch active products.
   const getActiveProducts = async () => {
@@ -62,8 +60,7 @@ const [reviewFilter, setReviewFilter] = useState("all");
       );
     } catch (error) {
       setMessage(
-        error.response?.data?.message ||
-          "Failed to get products"
+        error.response?.data?.message || "Failed to get products"
       );
     }
   };
@@ -114,9 +111,9 @@ const [reviewFilter, setReviewFilter] = useState("all");
     }
   };
 
-  // Handle form changes.
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  // Handle changes from existing controlled inputs.
+  const handleChange = (event) => {
+    const { name, value } = event.target;
 
     setFormData((previous) => ({
       ...previous,
@@ -125,8 +122,8 @@ const [reviewFilter, setReviewFilter] = useState("all");
   };
 
   // Validate and select new images.
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files || []);
+  const handleFileChange = (event) => {
+    const files = Array.from(event.target.files || []);
 
     const validFiles = files.filter(
       (file) =>
@@ -143,10 +140,8 @@ const [reviewFilter, setReviewFilter] = useState("all");
     }
 
     if (selectedFiles.length + validFiles.length > 10) {
-      setMessage(
-        "You can select up to 10 new images at a time."
-      );
-      e.target.value = "";
+      setMessage("You can select up to 10 new images at a time.");
+      event.target.value = "";
       return;
     }
 
@@ -155,7 +150,7 @@ const [reviewFilter, setReviewFilter] = useState("all");
       ...validFiles,
     ]);
 
-    e.target.value = "";
+    event.target.value = "";
   };
 
   // Remove a newly selected image.
@@ -174,31 +169,135 @@ const [reviewFilter, setReviewFilter] = useState("all");
     );
   };
 
-  // Create or update a product.
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  // Create or update a product using Formik's validated values.
+  const handleSubmit = async (values) => {
     setLoading(true);
     setMessage("");
 
     try {
+      // Formik passes validated values directly.
+      // Fall back to formData if this function is called without values.
+      const submittedValues =
+        values &&
+        typeof values === "object" &&
+        !("preventDefault" in values)
+          ? values
+          : formData;
+
+      const itemName = String(
+        submittedValues.item_name ?? ""
+      ).trim();
+
+      const description = String(
+        submittedValues.description ?? ""
+      ).trim();
+
+      const costPrice = Number(submittedValues.cost_price);
+      const sellPrice = Number(submittedValues.sell_price);
+      const category = String(
+        submittedValues.category ?? ""
+      ).trim();
+      const quantity = Number(submittedValues.quantity);
+
+      // Extra safety checks before sending the request.
+      // Yup handles the user-facing validation in ItemForm.jsx.
+      if (
+        !itemName ||
+        itemName.length > 100 ||
+        !description ||
+        !category
+      ) {
+        setMessage(
+          "Please provide a valid product name, description, and category."
+        );
+        return;
+      }
+
+      if (
+        submittedValues.cost_price === "" ||
+        !Number.isFinite(costPrice) ||
+        costPrice < 0 ||
+        Math.round(costPrice * 100) !==
+          Math.round(costPrice * 1000000) / 10000
+      ) {
+        // The Yup schema remains the primary source for decimal
+        // validation; this check ensures a finite nonnegative price.
+        if (
+          submittedValues.cost_price === "" ||
+          !Number.isFinite(costPrice) ||
+          costPrice < 0
+        ) {
+          setMessage("Please enter a valid cost price.");
+          return;
+        }
+      }
+
+      if (
+        submittedValues.sell_price === "" ||
+        !Number.isFinite(sellPrice) ||
+        sellPrice < 0
+      ) {
+        setMessage("Please enter a valid selling price.");
+        return;
+      }
+
+      if (
+        submittedValues.quantity === "" ||
+        !Number.isInteger(quantity) ||
+        quantity < 0
+      ) {
+        setMessage(
+          "Stock quantity must be a nonnegative whole number."
+        );
+        return;
+      }
+
+      
+      // Check whether anything actually changed when editing.
+      if (editingItem) {
+        const originalValues = {
+          item_name: editingItem.item_name || "",
+          description: editingItem.description || "",
+          cost_price: editingItem.cost_price ?? "",
+          sell_price: editingItem.sell_price ?? "",
+          category: editingItem.category || "",
+          quantity: editingItem.stock?.quantity ?? 0,
+        };
+
+        const hasFieldChanges =
+          String(submittedValues.item_name ?? "").trim() !==
+            String(originalValues.item_name).trim() ||
+          String(submittedValues.description ?? "").trim() !==
+            String(originalValues.description).trim() ||
+          Number(submittedValues.cost_price) !==
+            Number(originalValues.cost_price) ||
+          Number(submittedValues.sell_price) !==
+            Number(originalValues.sell_price) ||
+          String(submittedValues.category ?? "").trim() !==
+            String(originalValues.category).trim() ||
+          Number(submittedValues.quantity) !==
+            Number(originalValues.quantity);
+
+        const hasImageChanges =
+          selectedFiles.length > 0 || imagesToRemove.length > 0;
+
+        if (!hasFieldChanges && !hasImageChanges) {
+          setMessage(
+            "No changes detected. Please update at least one field or image."
+          );
+          return;
+        }
+      }
+
+
       const data = new FormData();
 
-      data.append("item_name", formData.item_name.trim());
-      data.append("description", formData.description);
-      data.append(
-        "cost_price",
-        String(Number(formData.cost_price))
-      );
-      data.append(
-        "sell_price",
-        String(Number(formData.sell_price))
-      );
-      data.append("category", formData.category.trim());
-      data.append(
-        "quantity",
-        String(Number(formData.quantity))
-      );
+      data.append("item_name", itemName);
+      data.append("description", description);
+      data.append("cost_price", String(costPrice));
+      data.append("sell_price", String(sellPrice));
+      data.append("category", category);
+      data.append("quantity", String(quantity));
 
       selectedFiles.forEach((file) => {
         data.append("images", file);
@@ -301,15 +400,13 @@ const [reviewFilter, setReviewFilter] = useState("all");
       }
 
       setMessage(
-        response.message ||
-          "Product moved to Deleted Products"
+        response.message || "Product moved to Deleted Products"
       );
 
       await getActiveProducts();
     } catch (error) {
       setMessage(
-        error.response?.data?.message ||
-          "Failed to delete product"
+        error.response?.data?.message || "Failed to delete product"
       );
     }
   };
@@ -461,94 +558,91 @@ const [reviewFilter, setReviewFilter] = useState("all");
   };
 
   // Get the available product categories.
-const categories = useMemo(() => {
-  return [
-    ...new Set(
-      items.map((item) => item.category).filter(Boolean)
-    ),
-  ];
-}, [items]);
+  const categories = useMemo(() => {
+    return [
+      ...new Set(
+        items.map((item) => item.category).filter(Boolean)
+      ),
+    ];
+  }, [items]);
 
-// Apply all product filters.
-const filteredItems = useMemo(() => {
-  return items.filter((item) => {
+  // Apply all product filters.
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      const search = searchTerm.toLowerCase().trim();
 
-    // Search by item name or description
-const search = searchTerm.toLowerCase().trim();
+      const matchesSearch =
+        (item.item_name || "")
+          .toLowerCase()
+          .includes(search) ||
+        (item.description || "")
+          .toLowerCase()
+          .includes(search);
 
-const matchesSearch =
-  (item.item_name || "").toLowerCase().includes(search) ||
-  (item.description || "").toLowerCase().includes(search);
+      if (!matchesSearch) return false;
 
-if (!matchesSearch) {
-  return false;
-}
+      const price = Number(item.sell_price) || 0;
 
-    const price = Number(item.sell_price) || 0;
+      const activeReviews = (item.reviews || []).filter(
+        (review) => !review.deleted_at
+      );
 
-    const activeReviews = (item.reviews || []).filter(
-      (review) => !review.deleted_at
-    );
+      const averageRating =
+        activeReviews.length > 0
+          ? activeReviews.reduce(
+              (total, review) =>
+                total + Number(review.rating),
+              0
+            ) / activeReviews.length
+          : 0;
 
-    const averageRating =
-      activeReviews.length > 0
-        ? activeReviews.reduce(
-            (total, review) => total + Number(review.rating),
-            0
-          ) / activeReviews.length
-        : 0;
+      if (minPrice !== "" && price < Number(minPrice)) {
+        return false;
+      }
 
-    // Price filter
-    if (minPrice !== "" && price < Number(minPrice)) {
-      return false;
-    }
+      if (maxPrice !== "" && price > Number(maxPrice)) {
+        return false;
+      }
 
-    if (maxPrice !== "" && price > Number(maxPrice)) {
-      return false;
-    }
+      if (
+        selectedCategory !== "all" &&
+        item.category !== selectedCategory
+      ) {
+        return false;
+      }
 
-    // Category filter
-    if (
-      selectedCategory !== "all" &&
-      item.category !== selectedCategory
-    ) {
-      return false;
-    }
+      if (
+        Number(minRating) > 0 &&
+        averageRating < Number(minRating)
+      ) {
+        return false;
+      }
 
-    // Average rating filter
-    if (
-      Number(minRating) > 0 &&
-      averageRating < Number(minRating)
-    ) {
-      return false;
-    }
+      if (
+        reviewFilter === "reviewed" &&
+        activeReviews.length === 0
+      ) {
+        return false;
+      }
 
-    // Review count filter
-    if (
-      reviewFilter === "reviewed" &&
-      activeReviews.length === 0
-    ) {
-      return false;
-    }
+      if (
+        reviewFilter === "10" &&
+        activeReviews.length < 10
+      ) {
+        return false;
+      }
 
-    if (
-      reviewFilter === "10" &&
-      activeReviews.length < 10
-    ) {
-      return false;
-    }
-
-    return true;
-  });
-}, [
-  items,
-  searchTerm,
-  minPrice,
-  maxPrice,
-  selectedCategory,
-  minRating,
-  reviewFilter,
-]);
+      return true;
+    });
+  }, [
+    items,
+    searchTerm,
+    minPrice,
+    maxPrice,
+    selectedCategory,
+    minRating,
+    reviewFilter,
+  ]);
 
   return {
     items,
@@ -594,8 +688,7 @@ if (!matchesSearch) {
     minRating,
     setMinRating,
     reviewFilter,
-    setReviewFilter
-
+    setReviewFilter,
   };
 }
 
