@@ -1,11 +1,7 @@
 
 const FINAL_STATUSES = ['Delivered', 'Cancelled']
 
-function AdminOrderStatus({
-    order,
-    onUpdateStatus,
-    updating
-}) {
+function AdminOrderStatus({ order, onUpdateStatus, updating }) {
     const isFinalized = FINAL_STATUSES.includes(order.status)
 
     return (

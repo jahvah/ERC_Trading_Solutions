@@ -2,11 +2,7 @@
 import AdminOrderItems from './AdminOrderItems'
 import AdminOrderStatus from './AdminOrderStatus'
 
-function AdminOrderCard({
-    order,
-    onUpdateStatus,
-    updating
-}) {
+function AdminOrderCard({ order, onUpdateStatus, updating }) {
     const customer = order.customer?.customer
 
     const customerName = customer

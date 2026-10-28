@@ -12,9 +12,7 @@ function AdminOrderItems({ orderLines = [] }) {
                         <p>
                             Item: {line.item?.item_name || 'Item unavailable'}
                         </p>
-
                         <p>Quantity: {line.quantity}</p>
-
                         <p>Price: {line.price}</p>
                     </div>
                 ))
