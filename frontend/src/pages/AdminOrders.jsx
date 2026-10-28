@@ -1,11 +1,18 @@
+
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 import { getToken } from '../utils/auth'
 import AdminNavbar from '../components/AdminNavbar'
+import AdminOrderCard from '../components/adminOrders/AdminOrderCard'
+
+const FINAL_STATUSES = ['Delivered', 'Cancelled']
 
 function AdminOrders() {
     const [orders, setOrders] = useState([])
     const [message, setMessage] = useState('')
+    const [messageType, setMessageType] = useState('')
+    const [loading, setLoading] = useState(true)
+    const [updatingOrderId, setUpdatingOrderId] = useState(null)
 
     useEffect(() => {
         getOrders()
@@ -13,29 +20,59 @@ function AdminOrders() {
 
     const getOrders = async () => {
         try {
+            setLoading(true)
+            setMessage('')
+            setMessageType('')
+
             const response = await api.get('/orders/admin/all', {
                 headers: {
                     Authorization: `Bearer ${getToken()}`
                 }
             })
 
-            setOrders(response.data.orders)
-
+            setOrders(response.data.orders || [])
         } catch (error) {
             setMessage(
                 error.response?.data?.message ||
                 'Failed to get orders'
             )
+            setMessageType('error')
+        } finally {
+            setLoading(false)
         }
     }
 
     const updateStatus = async (orderId, status) => {
+        const order = orders.find(
+            (item) => item._id === orderId
+        )
+
+        if (!order) {
+            setMessage('Order not found.')
+            setMessageType('error')
+            return
+        }
+
+        if (FINAL_STATUSES.includes(order.status)) {
+            setMessage(
+                'Delivered or cancelled orders cannot be updated.'
+            )
+            setMessageType('error')
+            return
+        }
+
+        if (updatingOrderId !== null || order.status === status) {
+            return
+        }
+
         try {
+            setUpdatingOrderId(orderId)
+            setMessage('')
+            setMessageType('')
+
             const response = await api.put(
                 `/orders/admin/${orderId}`,
-                {
-                    status
-                },
+                { status },
                 {
                     headers: {
                         Authorization: `Bearer ${getToken()}`
@@ -43,15 +80,27 @@ function AdminOrders() {
                 }
             )
 
-            setMessage(response.data.message)
+            setOrders((previousOrders) =>
+                previousOrders.map((item) =>
+                    item._id === orderId
+                        ? { ...item, status }
+                        : item
+                )
+            )
 
-            getOrders()
-
+            setMessage(
+                response.data.message ||
+                'Order status updated successfully.'
+            )
+            setMessageType('success')
         } catch (error) {
             setMessage(
                 error.response?.data?.message ||
-                'Failed to update order status'
+                'Failed to update order status.'
             )
+            setMessageType('error')
+        } finally {
+            setUpdatingOrderId(null)
         }
     }
 
@@ -59,99 +108,38 @@ function AdminOrders() {
         <div>
             <AdminNavbar />
 
-            <h1>Admin Orders</h1>
+            <main style={{ padding: '20px' }}>
+                <h1>Admin Orders</h1>
 
-            {message && (
-                <p>{message}</p>
-            )}
-
-            {orders.length === 0 && !message && (
-                <p>No orders found.</p>
-            )}
-
-            {orders.map((order) => (
-                <div key={order._id}>
-                    <h2>
-                        Order ID: {order._id}
-                    </h2>
-
-                    <p>
-                        Customer: {
-                            order.customer?.customer?.fname
-                        } {
-                            order.customer?.customer?.lname
-                        }
-                    </p>
-
-                    <p>
-                        Email: {order.customer?.email}
-                    </p>
-
-                    <p>
-                        Date Placed: {
-                            new Date(
-                                order.date_placed
-                            ).toLocaleString()
-                        }
-                    </p>
-
-                    <p>
-                        Status: {order.status}
-                    </p>
-
-                    <label>
-                        Change Status:
-                    </label>
-
-                    <select
-                        value={order.status}
-                        onChange={(e) =>
-                            updateStatus(
-                                order._id,
-                                e.target.value
-                            )
-                        }
+                {message && (
+                    <p
+                        role="status"
+                        style={{
+                            color:
+                                messageType === 'error'
+                                    ? 'red'
+                                    : 'green'
+                        }}
                     >
-                        <option value="Pending">
-                            Pending
-                        </option>
+                        {message}
+                    </p>
+                )}
 
-                        <option value="Shipped">
-                            Shipped
-                        </option>
-
-                        <option value="Delivered">
-                            Delivered
-                        </option>
-
-                        <option value="Cancelled">
-                            Cancelled
-                        </option>
-                    </select>
-
-                    <h3>Order Items</h3>
-
-                    {order.order_lines.map((line) => (
-                        <div key={line._id}>
-                            <p>
-                                Item: {
-                                    line.item?.item_name
-                                }
-                            </p>
-
-                            <p>
-                                Quantity: {line.quantity}
-                            </p>
-
-                            <p>
-                                Price: {line.price}
-                            </p>
-                        </div>
-                    ))}
-
-                    <hr />
-                </div>
-            ))}
+                {loading ? (
+                    <p>Loading orders...</p>
+                ) : orders.length === 0 ? (
+                    <p>No orders found.</p>
+                ) : (
+                    orders.map((order) => (
+                        <AdminOrderCard
+                            key={order._id}
+                            order={order}
+                            onUpdateStatus={updateStatus}
+                            updating={updatingOrderId === order._id}
+                        />
+                    ))
+                )}
+            </main>
         </div>
     )
 }
