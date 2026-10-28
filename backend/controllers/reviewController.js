@@ -311,6 +311,7 @@ const getAllReviews = async (req, res) => {
                         customer: review.customer,
                         rating: review.rating,
                         review_text: review.review_text,
+                        admin_reply: review.admin_reply || '',
                         created_at: review.created_at,
                         updated_at: review.updated_at
                     })
@@ -376,10 +377,68 @@ const deleteReview = async (req, res) => {
     }
 }
 
+const replyToReview = async (req, res) => {
+    try {
+        const { id } = req.params
+        const { admin_reply } = req.body
+
+        if (typeof admin_reply !== 'string' || !admin_reply.trim()) {
+            return res.status(400).json({
+                message: 'Please enter a reply.'
+            })
+        }
+
+        if (admin_reply.trim().length > 1000) {
+            return res.status(400).json({
+                message: 'Reply cannot exceed 1000 characters.'
+            })
+        }
+
+        const item = await Item.findOne({
+            'reviews._id': id
+        })
+
+        if (!item) {
+            return res.status(404).json({
+                message: 'Review not found.'
+            })
+        }
+
+        const review = item.reviews.id(id)
+
+        if (!review || review.deleted_at) {
+            return res.status(404).json({
+                message: 'Review not found.'
+            })
+        }
+
+        review.admin_reply = maskBadWords(admin_reply.trim())
+        await item.save()
+
+        return res.status(200).json({
+            message: 'Reply saved successfully.',
+            review: {
+                _id: review._id,
+                admin_reply: review.admin_reply
+            }
+        })
+    } catch (error) {
+        console.error('Reply to review error:', error)
+
+        return res.status(500).json({
+            message: 'Failed to save reply.'
+        })
+    }
+}
+
+module.exports.replyToReview = replyToReview
+
+
 module.exports = {
     createReview,
     getMyOrderItemReview,
     updateOrderItemReview,
     getAllReviews,
-    deleteReview
+    deleteReview,
+    replyToReview
 }

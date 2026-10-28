@@ -94,6 +94,13 @@ const itemSchema = new mongoose.Schema({
                 required: true
             },
 
+            admin_reply: {
+                type: String,
+                default: '',
+                trim: true,
+                maxlength: 1000
+            },
+
             images: [
                 {
                     image_path: {
