@@ -76,6 +76,12 @@ const itemSchema = new mongoose.Schema({
                 required: true
             },
 
+            order: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Order',
+            required: false
+            },
+
             rating: {
                 type: Number,
                 required: true,
