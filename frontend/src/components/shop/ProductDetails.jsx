@@ -1,7 +1,4 @@
-import {
-  getProductRating,
-  getProductReviewCount,
-} from "../../hooks/useShop";
+import { getProductRating, getProductReviewCount } from "../../hooks/useShop";
 
 function ProductDetails({
   item,
@@ -15,12 +12,10 @@ function ProductDetails({
   if (!item) return null;
 
   const activeImages = (item.images || []).filter(
-    (image) => !image.deleted_at && image.image_path
+    (image) => !image.deleted_at && image.image_path,
   );
 
-  const reviews = (item.reviews || []).filter(
-    (review) => !review.deleted_at
-  );
+  const reviews = (item.reviews || []).filter((review) => !review.deleted_at);
 
   const stock = Number(item.stock?.quantity) || 0;
   const rating = getProductRating(item);
@@ -66,7 +61,11 @@ function ProductDetails({
           }}
         >
           <h2 id="product-details-title">Product Details</h2>
-          <button type="button" onClick={onClose} aria-label="Close product details">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close product details"
+          >
             ✕
           </button>
         </div>
@@ -78,7 +77,8 @@ function ProductDetails({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
                 gap: 24,
               }}
             >
@@ -87,7 +87,8 @@ function ProductDetails({
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(100px, 1fr))",
                       gap: 10,
                     }}
                   >
@@ -115,7 +116,8 @@ function ProductDetails({
                 <h3>{item.item_name}</h3>
 
                 <p style={{ fontSize: 24, fontWeight: 700, color: "#166534" }}>
-                  ₱{Number(item.sell_price || 0).toLocaleString("en-PH", {
+                  ₱
+                  {Number(item.sell_price || 0).toLocaleString("en-PH", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -158,7 +160,7 @@ function ProductDetails({
                     setQuantity(
                       Number.isFinite(value) && value >= 1
                         ? Math.min(Math.floor(value), stock)
-                        : 1
+                        : 1,
                     );
                   }}
                   style={{
@@ -212,31 +214,75 @@ function ProductDetails({
                             : "Customer"}
                         </strong>
                         {" · "}
-                        {"★".repeat(Math.max(0, Math.min(5, Number(review.rating) || 0)))}
-                        {"☆".repeat(5 - Math.max(0, Math.min(5, Number(review.rating) || 0)))}
+                        {"★".repeat(
+                          Math.max(0, Math.min(5, Number(review.rating) || 0)),
+                        )}
+                        {"☆".repeat(
+                          5 -
+                            Math.max(
+                              0,
+                              Math.min(5, Number(review.rating) || 0),
+                            ),
+                        )}
                       </p>
 
                       <p style={{ whiteSpace: "pre-wrap" }}>
                         {review.review_text}
                       </p>
 
-                      {review.images?.filter(
-                        (image) => !image.deleted_at && image.image_path
-                      ).map((image, index) => (
-                        <img
-                          key={image._id || image.image_path}
-                          src={image.image_path}
-                          alt={`Review image ${index + 1}`}
-                          loading="lazy"
+                      {review.admin_reply?.trim() && (
+                        <div
                           style={{
-                            width: 90,
-                            height: 90,
-                            objectFit: "cover",
+                            marginTop: 12,
+                            marginBottom: 12,
+                            marginLeft: 12,
+                            padding: 12,
+                            backgroundColor: "#f0fdf4",
+                            borderLeft: "4px solid #166534",
                             borderRadius: 6,
-                            marginRight: 8,
                           }}
-                        />
-                      ))}
+                        >
+                          <p
+                            style={{
+                              margin: "0 0 6px",
+                              fontWeight: 700,
+                              color: "#166534",
+                            }}
+                          >
+                            Admin Reply
+                          </p>
+
+                          <p
+                            style={{
+                              margin: 0,
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            {review.admin_reply}
+                          </p>
+                        </div>
+                      )}
+
+                      {review.images
+                        ?.filter(
+                          (image) => !image.deleted_at && image.image_path,
+                        )
+                        .map((image, index) => (
+                          <img
+                            key={image._id || image.image_path}
+                            src={image.image_path}
+                            alt={`Review image ${index + 1}`}
+                            loading="lazy"
+                            style={{
+                              width: 90,
+                              height: 90,
+                              objectFit: "cover",
+                              borderRadius: 6,
+                              marginRight: 8,
+                            }}
+                          />
+                        ))}
 
                       {review.created_at && (
                         <small style={{ color: "#6b7280" }}>
